@@ -16,22 +16,4 @@
  *    limitations under the License.
  */
 
-#include "buffer_class.h"
-#include "packer_class.h"
-#include "unpacker_class.h"
-#include "extended_class.h"
-//~ #include "object_class.h"
-#include "core_ext.h"
-
-void Init_msgpack(void)
-{
-    VALUE mMessagePack = rb_define_module("MessagePack");
-
-    MessagePack_Buffer_module_init(mMessagePack);
-    MessagePack_Packer_module_init(mMessagePack);
-    MessagePack_Unpacker_module_init(mMessagePack);
-    MessagePack_Extended_module_init(mMessagePack);
-    //~ MessagePack_Object_module_init();
-    MessagePack_core_ext_module_init();
-}
-
+void MessagePack_Extended_module_init(VALUE mMessagePack);

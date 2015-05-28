@@ -62,6 +62,7 @@ struct msgpack_unpacker_t {
     bool symbolize_keys;
 };
 
+#define HEAD_BYTE_REQUIRED 0xc1
 #define UNPACKER_BUFFER_(uk) (&(uk)->buffer)
 
 enum msgpack_unpacker_object_type {
@@ -72,6 +73,9 @@ enum msgpack_unpacker_object_type {
     TYPE_RAW,
     TYPE_ARRAY,
     TYPE_MAP,
+    TYPE_STRING, // currently not used, string codes map to TYPE_RAW.
+    TYPE_BINARY, // currently not used, binary codes map to TYPE_RAW.
+    TYPE_EXT,
 };
 
 void msgpack_unpacker_static_init();

@@ -18,6 +18,7 @@
 
 #include "unpacker.h"
 #include "rmem.h"
+#include "extended.h"
 
 #if !defined(DISABLE_RMEM) && !defined(DISABLE_UNPACKER_STACK_RMEM) && \
         MSGPACK_UNPACKER_STACK_CAPACITY * MSGPACK_UNPACKER_STACK_SIZE <= MSGPACK_RMEM_PAGE_SIZE
@@ -41,8 +42,6 @@ void msgpack_unpacker_static_destroy()
     msgpack_rmem_destroy(&s_stack_rmem);
 #endif
 }
-
-#define HEAD_BYTE_REQUIRED 0xc1
 
 void _msgpack_unpacker_init(msgpack_unpacker_t* uk)
 {
@@ -327,9 +326,29 @@ static int read_primitive(msgpack_unpacker_t* uk)
         case 0xc3:  // true
             return object_complete(uk, Qtrue);
 
-        //case 0xc7: // ext 8
-        //case 0xc8: // ext 16
-        //case 0xc9: // ext 32
+        case 0xc7: // ext 8
+            {
+                READ_CAST_BLOCK_OR_RETURN_EOF(cb, uk, 1);
+                uint8_t count = cb->u8;
+                uk->reading_raw_remaining = count;
+                return msgpack_read_extended_body( uk);
+            }
+
+        case 0xc8: // ext 16
+            {
+                READ_CAST_BLOCK_OR_RETURN_EOF(cb, uk, 2);
+                uint16_t count = _msgpack_be16(cb->u16);
+                uk->reading_raw_remaining = count;
+                return msgpack_read_extended_body( uk);
+            }
+
+        case 0xc9: // ext 32
+            {
+                READ_CAST_BLOCK_OR_RETURN_EOF(cb, uk, 4);
+                uint32_t count = _msgpack_be32(cb->u32);
+                uk->reading_raw_remaining = count;
+                return msgpack_read_extended_body( uk);
+            }
 
         case 0xca:  // float
             {
@@ -401,11 +420,15 @@ static int read_primitive(msgpack_unpacker_t* uk)
                 return object_complete(uk, rb_ll2inum(i64));
             }
 
-        //case 0xd4:  // fixext 1
-        //case 0xd5:  // fixext 2
-        //case 0xd6:  // fixext 4
-        //case 0xd7:  // fixext 8
-        //case 0xd8:  // fixext 16
+        case 0xd4:  // fixext 1
+        case 0xd5:  // fixext 2
+        case 0xd6:  // fixext 4
+        case 0xd7:  // fixext 8
+        case 0xd8:  // fixext 16
+            {
+                uk->reading_raw_remaining = 1UL << (b - 0xd4);
+                return msgpack_read_extended_body( uk);
+            }
 
         case 0xd9:  // raw 8 / str 8
             {
@@ -695,14 +718,17 @@ int msgpack_unpacker_peek_next_object_type(msgpack_unpacker_t* uk)
     SWITCH_RANGE(b, 0xe0, 0xff)  // Negative Fixnum
         return TYPE_INTEGER;
 
-    SWITCH_RANGE(b, 0xa0, 0xbf)  // FixRaw
-        return TYPE_RAW;
+    SWITCH_RANGE(b, 0xa0, 0xbf)  // FixRaw / FixStr
+        return TYPE_RAW;  // should be TYPE_STRING according to the latest spec
 
     SWITCH_RANGE(b, 0x90, 0x9f)  // FixArray
         return TYPE_ARRAY;
 
     SWITCH_RANGE(b, 0x80, 0x8f)  // FixMap
         return TYPE_MAP;
+
+    SWITCH_RANGE(b, 0xd4, 0xd8)  // FixExt
+        return TYPE_EXT;
 
     SWITCH_RANGE(b, 0xc0, 0xdf)  // Variable
         switch(b) {
@@ -732,12 +758,12 @@ int msgpack_unpacker_peek_next_object_type(msgpack_unpacker_t* uk)
         case 0xd9:  // raw 8 / str 8
         case 0xda:  // raw 16 / str 16
         case 0xdb:  // raw 32 / str 32
-            return TYPE_RAW;
+            return TYPE_RAW;  // should be TYPE_STRING according to the latest spec
 
         case 0xc4:  // bin 8
         case 0xc5:  // bin 16
         case 0xc6:  // bin 32
-            return TYPE_RAW;
+            return TYPE_RAW;  // should be TYPE_BINARY according to the latest spec
 
         case 0xdc:  // array 16
         case 0xdd:  // array 32
@@ -746,6 +772,11 @@ int msgpack_unpacker_peek_next_object_type(msgpack_unpacker_t* uk)
         case 0xde:  // map 16
         case 0xdf:  // map 32
             return TYPE_MAP;
+
+        case 0xc7:  // ext 8
+        case 0xc8:  // ext 16
+        case 0xc9:  // ext 32
+            return TYPE_EXT;
 
         default:
             return PRIMITIVE_INVALID_BYTE;
