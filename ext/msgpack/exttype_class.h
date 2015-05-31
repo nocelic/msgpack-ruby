@@ -16,13 +16,26 @@
  *    limitations under the License.
  */
 
-#ifndef MSGPACK_RUBY_EXTENDED_H__
-#define MSGPACK_RUBY_EXTENDED_H__
+#ifndef MSGPACK_RUBY_EXTTYPE_CLASS_H__
+#define MSGPACK_RUBY_EXTTYPE_CLASS_H__
 
-#include "unpacker.h"
+#include "packer.h"
 
-VALUE cMessagePack_Extended;
+extern VALUE cMessagePack_ExtType;
 
-int msgpack_read_extended_body( msgpack_unpacker_t* uk);
+void MessagePack_ExtType_module_init(VALUE mMessagePack);
+
+static inline int8_t _exttype_check_typecode(VALUE arg)
+{
+    if(rb_type(arg) == T_FIXNUM) {
+        int nr = FIX2INT(arg);
+        if(nr >= 0 && nr <= 127) {
+            return nr;
+        } else {
+            rb_raise(rb_eArgError, "expected integer value 0..127 for exttype typecode");
+        }
+    }
+    rb_raise(rb_eTypeError, "expected Integer for exttype typecode");
+}
 
 #endif

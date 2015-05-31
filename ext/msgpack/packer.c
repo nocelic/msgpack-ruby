@@ -76,7 +76,7 @@ void msgpack_packer_write_array_value(msgpack_packer_t* pk, VALUE v)
     /* actual return type of RARRAY_LEN is long */
     unsigned long len = RARRAY_LEN(v);
     if(len > 0xffffffffUL) {
-        rb_raise(rb_eArgError, "size of array is too long to pack: %lu bytes should be <= %lu", len, 0xffffffffUL);
+        rb_raise(rb_eArgError, "size of array is too long to pack: %lu entries, should be <= %lu", len, 0xffffffffUL);
     }
     unsigned int len32 = (unsigned int)len;
     msgpack_packer_write_array_header(pk, len32);
@@ -105,7 +105,7 @@ void msgpack_packer_write_hash_value(msgpack_packer_t* pk, VALUE v)
      * or long long (if SIZEOF_LONG_LONG == SIZEOF_VOIDP. See st.h. */
     unsigned long len = RHASH_SIZE(v);
     if(len > 0xffffffffUL) {
-        rb_raise(rb_eArgError, "size of array is too long to pack: %ld bytes should be <= %lu", len, 0xffffffffUL);
+        rb_raise(rb_eArgError, "size of hash is too long to pack: %ld entries, should be <= %lu", len, 0xffffffffUL);
     }
     unsigned int len32 = (unsigned int)len;
     msgpack_packer_write_map_header(pk, len32);

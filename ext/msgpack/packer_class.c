@@ -21,6 +21,7 @@
 #include "packer.h"
 #include "packer_class.h"
 #include "buffer_class.h"
+#include "exttype_class.h"
 
 VALUE cMessagePack_Packer;
 
@@ -125,6 +126,14 @@ static VALUE Packer_write_map_header(VALUE self, VALUE n)
 {
     PACKER(self, pk);
     msgpack_packer_write_map_header(pk, NUM2UINT(n));
+    return self;
+}
+
+static VALUE Packer_write_exttype_header(VALUE self, VALUE n, VALUE type)
+{
+    PACKER(self, pk);
+    int8_t typenr = _exttype_check_typecode(type);
+    msgpack_packer_write_exttype_header(pk, NUM2UINT(n), typenr);
     return self;
 }
 
@@ -278,6 +287,7 @@ void MessagePack_Packer_module_init(VALUE mMessagePack)
     rb_define_method(cMessagePack_Packer, "write_nil", Packer_write_nil, 0);
     rb_define_method(cMessagePack_Packer, "write_array_header", Packer_write_array_header, 1);
     rb_define_method(cMessagePack_Packer, "write_map_header", Packer_write_map_header, 1);
+    rb_define_method(cMessagePack_Packer, "write_exttype_header", Packer_write_exttype_header, 2);
     rb_define_method(cMessagePack_Packer, "flush", Packer_flush, 0);
 
     /* delegation methods */

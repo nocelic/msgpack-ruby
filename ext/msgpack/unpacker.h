@@ -58,6 +58,8 @@ struct msgpack_unpacker_t {
 
     VALUE buffer_ref;
 
+    VALUE extended_types;  // how to unpack extended types. Can be Qnil, Qfalse or a hash
+
     /* options */
     bool symbolize_keys;
 };
@@ -95,6 +97,83 @@ static inline void msgpack_unpacker_set_symbolized_keys(msgpack_unpacker_t* uk, 
     uk->symbolize_keys = enable;
 }
 
+/* shared code for extended types */
+
+extern ID s_from_msgpack;
+extern ID s_call;
+
+static inline VALUE _get_default_extended_type( VALUE extended_types)
+{
+    if(RTEST(extended_types)) {  // type-specific mechanism active
+        return rb_hash_aref(extended_types, Qtrue);  // to get the default value, as Qtrue is not used as a key
+    } else {  // universal rejection (Qfalse) or defaulting (Qnil) active
+        return extended_types;
+    }
+}
+
+static inline VALUE _get_extended_type( VALUE extended_types, int8_t typenr)
+{
+    if(RTEST(extended_types)) {  // type-specific mechanism active
+        return rb_hash_lookup2(extended_types, INT2FIX(typenr), Qnil);
+    } else {
+        return Qnil;  // by default, all extended_types are defaulting
+    }
+}
+
+/* class-level (global) extended types */
+
+extern VALUE msgpack_unpacker_class_extended_types;  // Qnil, Qfalse or a hash
+
+void msgpack_unpacker_class_set_default_extended_type(VALUE val);
+
+static inline VALUE msgpack_unpacker_class_get_default_extended_type()
+{
+    return _get_default_extended_type( msgpack_unpacker_class_extended_types);
+}
+
+void msgpack_unpacker_class_set_extended_type(int8_t typenr, VALUE val);
+
+static inline VALUE msgpack_unpacker_class_get_extended_type(int8_t typenr)
+{
+    return _get_extended_type( msgpack_unpacker_class_extended_types, typenr);
+}
+
+/* per-instance extended types */
+
+void msgpack_unpacker_set_default_extended_type(msgpack_unpacker_t* uk, VALUE val);
+
+static inline VALUE msgpack_unpacker_get_default_extended_type(msgpack_unpacker_t* uk)
+{
+    return _get_default_extended_type( uk->extended_types);
+}
+
+void msgpack_unpacker_set_extended_type(msgpack_unpacker_t* uk, int8_t typenr, VALUE val);
+
+static inline VALUE msgpack_unpacker_get_extended_type(msgpack_unpacker_t* uk, int8_t typenr)
+{
+    return _get_extended_type( uk->extended_types, typenr);
+}
+
+static inline VALUE msgpack_unpacker_resolve_extended_type(msgpack_unpacker_t* uk, int8_t typenr)
+{
+    VALUE extended_types = uk->extended_types;
+    VALUE nr = INT2FIX(typenr);
+    VALUE result;
+
+    if(RTEST(extended_types)) {
+        result = rb_hash_aref(extended_types, nr);
+    } else {
+        result = extended_types;
+    }
+    if(result == Qnil) {  // instance defaulted, escalate to class
+        result = _get_extended_type( msgpack_unpacker_class_extended_types, typenr);
+    }
+    return result;
+}
+
+
+int msgpack_read_extended_type_begin( msgpack_unpacker_t* uk);
+
 
 /* error codes */
 #define PRIMITIVE_CONTAINER_START 1
@@ -103,6 +182,7 @@ static inline void msgpack_unpacker_set_symbolized_keys(msgpack_unpacker_t* uk, 
 #define PRIMITIVE_INVALID_BYTE -2
 #define PRIMITIVE_STACK_TOO_DEEP -3
 #define PRIMITIVE_UNEXPECTED_TYPE -4
+#define PRIMITIVE_UNKNOWN_EXTTYPE -5
 
 int msgpack_unpacker_read(msgpack_unpacker_t* uk, size_t target_stack_depth);
 

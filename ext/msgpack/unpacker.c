@@ -18,7 +18,7 @@
 
 #include "unpacker.h"
 #include "rmem.h"
-#include "extended.h"
+#include "exttype_class.h"
 
 #if !defined(DISABLE_RMEM) && !defined(DISABLE_UNPACKER_STACK_RMEM) && \
         MSGPACK_UNPACKER_STACK_CAPACITY * MSGPACK_UNPACKER_STACK_SIZE <= MSGPACK_RMEM_PAGE_SIZE
@@ -29,11 +29,16 @@
 static msgpack_rmem_t s_stack_rmem;
 #endif
 
+VALUE msgpack_unpacker_class_extended_types = Qfalse;
+
 void msgpack_unpacker_static_init()
 {
 #ifdef UNPACKER_STACK_RMEM
     msgpack_rmem_init(&s_stack_rmem);
 #endif
+
+    /* default choice for unpacking extended types */
+    msgpack_unpacker_class_set_default_extended_type(cMessagePack_ExtType);
 }
 
 void msgpack_unpacker_static_destroy()
@@ -42,6 +47,33 @@ void msgpack_unpacker_static_destroy()
     msgpack_rmem_destroy(&s_stack_rmem);
 #endif
 }
+
+// helper function shared with instance methods:
+static inline void _msgpack_unpacker_make_extended_hash(VALUE *extended_types) {
+    VALUE ev = *extended_types;
+    if(!RTEST(ev)) {
+      VALUE h = rb_hash_new();
+      rb_hash_set_ifnone(h, ev);
+      *extended_types = h;
+    }
+}
+
+void msgpack_unpacker_class_set_default_extended_type(VALUE val)
+{
+    if(RTEST(val) || RTEST(msgpack_unpacker_class_extended_types)) {
+        _msgpack_unpacker_make_extended_hash(&msgpack_unpacker_class_extended_types);
+        rb_hash_set_ifnone(msgpack_unpacker_class_extended_types, val);
+    } else {
+        msgpack_unpacker_class_extended_types = val;
+    }
+}
+
+void msgpack_unpacker_class_set_extended_type(int8_t typenr, VALUE val)
+{
+    _msgpack_unpacker_make_extended_hash(&msgpack_unpacker_class_extended_types);
+    rb_hash_aset(msgpack_unpacker_class_extended_types, INT2FIX(typenr), val);
+}
+
 
 void _msgpack_unpacker_init(msgpack_unpacker_t* uk)
 {
@@ -53,6 +85,7 @@ void _msgpack_unpacker_init(msgpack_unpacker_t* uk)
 
     uk->last_object = Qnil;
     uk->reading_raw = Qnil;
+    uk->extended_types = Qnil;
 
 #ifdef UNPACKER_STACK_RMEM
     uk->stack = msgpack_rmem_alloc(&s_stack_rmem);
@@ -79,6 +112,7 @@ void msgpack_unpacker_mark(msgpack_unpacker_t* uk)
 {
     rb_gc_mark(uk->last_object);
     rb_gc_mark(uk->reading_raw);
+    rb_gc_mark(uk->extended_types);
 
     msgpack_unpacker_stack_t* s = uk->stack;
     msgpack_unpacker_stack_t* send = uk->stack + uk->stack_depth;
@@ -104,6 +138,27 @@ void _msgpack_unpacker_reset(msgpack_unpacker_t* uk)
     uk->last_object = Qnil;
     uk->reading_raw = Qnil;
     uk->reading_raw_remaining = 0;
+}
+
+void msgpack_unpacker_set_default_extended_type(msgpack_unpacker_t* uk, VALUE val)
+{
+    if(RTEST(val) || RTEST(uk->extended_types)) {
+        _msgpack_unpacker_make_extended_hash(&uk->extended_types);
+        rb_hash_set_ifnone(uk->extended_types, val);
+    } else {
+        uk->extended_types = val;
+    }
+}
+
+void msgpack_unpacker_set_extended_type(msgpack_unpacker_t* uk, int8_t typenr, VALUE val)
+{
+    _msgpack_unpacker_make_extended_hash(&uk->extended_types);
+    VALUE key = INT2FIX(typenr);
+    if(val == Qnil) {
+        rb_hash_delete(uk->extended_types, key);
+    } else {
+        rb_hash_aset(uk->extended_types, key, val);
+    }
 }
 
 
@@ -331,7 +386,7 @@ static int read_primitive(msgpack_unpacker_t* uk)
                 READ_CAST_BLOCK_OR_RETURN_EOF(cb, uk, 1);
                 uint8_t count = cb->u8;
                 uk->reading_raw_remaining = count;
-                return msgpack_read_extended_body( uk);
+                return msgpack_read_extended_type_begin( uk);
             }
 
         case 0xc8: // ext 16
@@ -339,7 +394,7 @@ static int read_primitive(msgpack_unpacker_t* uk)
                 READ_CAST_BLOCK_OR_RETURN_EOF(cb, uk, 2);
                 uint16_t count = _msgpack_be16(cb->u16);
                 uk->reading_raw_remaining = count;
-                return msgpack_read_extended_body( uk);
+                return msgpack_read_extended_type_begin( uk);
             }
 
         case 0xc9: // ext 32
@@ -347,7 +402,7 @@ static int read_primitive(msgpack_unpacker_t* uk)
                 READ_CAST_BLOCK_OR_RETURN_EOF(cb, uk, 4);
                 uint32_t count = _msgpack_be32(cb->u32);
                 uk->reading_raw_remaining = count;
-                return msgpack_read_extended_body( uk);
+                return msgpack_read_extended_type_begin( uk);
             }
 
         case 0xca:  // float
@@ -427,7 +482,7 @@ static int read_primitive(msgpack_unpacker_t* uk)
         case 0xd8:  // fixext 16
             {
                 uk->reading_raw_remaining = 1UL << (b - 0xd4);
-                return msgpack_read_extended_body( uk);
+                return msgpack_read_extended_type_begin( uk);
             }
 
         case 0xd9:  // raw 8 / str 8
@@ -606,6 +661,81 @@ int msgpack_unpacker_read_map_header(msgpack_unpacker_t* uk, uint32_t* result_si
 
     reset_head_byte(uk);
     return 0;
+}
+
+static inline int object_complete_extended_type(msgpack_unpacker_t* uk, int8_t typenr, VALUE data)
+{
+    /* reset unpacker struct */
+    uk->head_byte = HEAD_BYTE_REQUIRED;
+    uk->reading_raw_remaining = 0;
+    uk->reading_raw = Qnil;  // previous value, if any, has been passed here as 3rd argument (data)
+
+    /* find the unpacking target */
+    VALUE target = msgpack_unpacker_resolve_extended_type(uk, typenr);
+    ID method = s_from_msgpack;
+
+    /* how to construct the unpacked object? */
+    switch(rb_type(target)) {
+    case T_FALSE:  // explicit rejection of the exttype
+    case T_NIL:    // both the instance and the class defaulted, no target exists
+        return PRIMITIVE_UNKNOWN_EXTTYPE;
+    case T_OBJECT:  // the object must be callable or it would have been rejected on setting
+        method = s_call;
+        break;
+    case T_CLASS:  // the class must respond to 'from_msgpack' or it would have been rejected on setting
+        // no-op, s_from_msgpack is the method we want
+        break;
+    default:  // we cannot be here, except by a mistake in the lib which permitted setting an invalid target
+        rb_raise(rb_eTypeError, "invalid exttype unpack target");
+    }
+
+    /* let the unpacking target construct the unpacked object from raw data */
+#ifdef COMPAT_HAVE_ENCODING
+    ENCODING_SET(data, msgpack_rb_encindex_ascii8bit);
+#endif
+    VALUE argv[2] = {INT2FIX(typenr), data};
+    uk->last_object = rb_funcall2(target, method, 2, argv);
+
+    return PRIMITIVE_OBJECT_COMPLETE;
+}
+
+static inline int read_extended_type_cont(msgpack_unpacker_t* uk, int8_t extended_type)
+{
+    size_t length = uk->reading_raw_remaining;
+
+    if(uk->reading_raw == Qnil) {
+        uk->reading_raw = rb_str_buf_new(length);
+    }
+
+    do {
+        size_t n = msgpack_buffer_read_to_string(UNPACKER_BUFFER_(uk), uk->reading_raw, length);
+        if(n == 0) {
+            return PRIMITIVE_EOF;
+        }
+        uk->reading_raw_remaining = length = length - n;
+    } while(length > 0);
+
+    return object_complete_extended_type(uk, extended_type, uk->reading_raw);
+}
+
+int msgpack_read_extended_type_begin(msgpack_unpacker_t* uk)
+{
+    int8_t extended_type;
+    union msgpack_buffer_cast_block_t* cb = msgpack_buffer_read_cast_block(UNPACKER_BUFFER_(uk), 1);
+    if(cb == NULL) {
+        return PRIMITIVE_EOF;
+    } else {
+      extended_type = cb->i8;
+    }
+
+    size_t length = uk->reading_raw_remaining;
+
+    if(length <= msgpack_buffer_top_readable_size(UNPACKER_BUFFER_(uk))) {
+        VALUE data = msgpack_buffer_read_top_as_string(UNPACKER_BUFFER_(uk), length, false);
+        return object_complete_extended_type(uk, extended_type, data);
+    }
+
+    return read_extended_type_cont(uk, extended_type);
 }
 
 int msgpack_unpacker_read(msgpack_unpacker_t* uk, size_t target_stack_depth)

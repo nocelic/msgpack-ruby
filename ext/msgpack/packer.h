@@ -336,6 +336,43 @@ static inline void msgpack_packer_write_map_header(msgpack_packer_t* pk, unsigne
     }
 }
 
+#define MSGPACK_PACKER_WRITE_EXTTYPE_HEADER_DRY(code, len) \
+        msgpack_buffer_ensure_writable(PACKER_BUFFER_(pk), len + 2); \
+        msgpack_buffer_write_byte_and_data(PACKER_BUFFER_(pk), code, (const void*)&be, len);
+
+static inline void msgpack_packer_write_exttype_header(msgpack_packer_t* pk, size_t n, int8_t typenr)
+{
+    int code = 0;
+    switch(n) {
+    case  1: code = 0xd4; break;
+    case  2: code = 0xd5; break;
+    case  4: code = 0xd6; break;
+    case  8: code = 0xd7; break;
+    case 16: code = 0xd8; break;
+    }
+    if(code) {  // fixext
+        msgpack_buffer_ensure_writable(PACKER_BUFFER_(pk), 2);
+        msgpack_buffer_write_2(PACKER_BUFFER_(pk), code, typenr);
+
+    } else {    // ext
+        if(n <= 0xFF) {
+            unsigned char be = (uint8_t) n;
+            MSGPACK_PACKER_WRITE_EXTTYPE_HEADER_DRY(0xc7, 1);
+        } else if(n <= 0xFFFF) {
+            uint16_t be = _msgpack_be16(n);
+            MSGPACK_PACKER_WRITE_EXTTYPE_HEADER_DRY(0xc8, 2);
+        } else if(n <= 0xFFFFFFFF) {
+            uint32_t be = _msgpack_be32(n);
+            MSGPACK_PACKER_WRITE_EXTTYPE_HEADER_DRY(0xc9, 4);
+        } else {
+            rb_raise(rb_eArgError, "size of exttype data is too long to pack: %lu bytes should be <= %lu", n, 0xffffffffUL);
+        }
+        msgpack_buffer_write_1(PACKER_BUFFER_(pk), typenr);
+    }
+}
+
+
+
 #ifdef COMPAT_HAVE_ENCODING
 static inline bool msgpack_packer_is_binary(VALUE v, int encindex)
 {
