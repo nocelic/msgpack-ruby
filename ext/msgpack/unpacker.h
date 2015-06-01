@@ -57,6 +57,7 @@ struct msgpack_unpacker_t {
     size_t reading_raw_remaining;
 
     VALUE buffer_ref;
+    VALUE self_ref;
 
     VALUE extended_types;  // how to unpack extended types. Can be Qnil, Qfalse or a hash
 
@@ -99,7 +100,7 @@ static inline void msgpack_unpacker_set_symbolized_keys(msgpack_unpacker_t* uk, 
 
 /* shared code for extended types */
 
-extern ID s_from_msgpack;
+extern ID s_from_exttype;
 extern ID s_call;
 
 static inline VALUE _get_default_extended_type( VALUE extended_types)
@@ -166,7 +167,7 @@ static inline VALUE msgpack_unpacker_resolve_extended_type(msgpack_unpacker_t* u
         result = extended_types;
     }
     if(result == Qnil) {  // instance defaulted, escalate to class
-        result = _get_extended_type( msgpack_unpacker_class_extended_types, typenr);
+        result = rb_hash_aref( msgpack_unpacker_class_extended_types, nr);
     }
     return result;
 }

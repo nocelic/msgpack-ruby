@@ -62,6 +62,7 @@ void msgpack_unpacker_class_set_default_extended_type(VALUE val)
 {
     if(RTEST(val) || RTEST(msgpack_unpacker_class_extended_types)) {
         _msgpack_unpacker_make_extended_hash(&msgpack_unpacker_class_extended_types);
+        rb_gc_register_address( &msgpack_unpacker_class_extended_types);
         rb_hash_set_ifnone(msgpack_unpacker_class_extended_types, val);
     } else {
         msgpack_unpacker_class_extended_types = val;
@@ -672,7 +673,7 @@ static inline int object_complete_extended_type(msgpack_unpacker_t* uk, int8_t t
 
     /* find the unpacking target */
     VALUE target = msgpack_unpacker_resolve_extended_type(uk, typenr);
-    ID method = s_from_msgpack;
+    ID method = s_from_exttype;
 
     /* how to construct the unpacked object? */
     switch(rb_type(target)) {
@@ -682,8 +683,8 @@ static inline int object_complete_extended_type(msgpack_unpacker_t* uk, int8_t t
     case T_OBJECT:  // the object must be callable or it would have been rejected on setting
         method = s_call;
         break;
-    case T_CLASS:  // the class must respond to 'from_msgpack' or it would have been rejected on setting
-        // no-op, s_from_msgpack is the method we want
+    case T_CLASS:  // the class must respond to 'from_exttype' or it would have been rejected on setting
+        // no-op, s_from_exttype is the method we want
         break;
     default:  // we cannot be here, except by a mistake in the lib which permitted setting an invalid target
         rb_raise(rb_eTypeError, "invalid exttype unpack target");
@@ -693,8 +694,8 @@ static inline int object_complete_extended_type(msgpack_unpacker_t* uk, int8_t t
 #ifdef COMPAT_HAVE_ENCODING
     ENCODING_SET(data, msgpack_rb_encindex_ascii8bit);
 #endif
-    VALUE argv[2] = {INT2FIX(typenr), data};
-    uk->last_object = rb_funcall2(target, method, 2, argv);
+    VALUE argv[3] = {INT2FIX(typenr), data, uk->self_ref};
+    uk->last_object = rb_funcall2(target, method, 3, argv);
 
     return PRIMITIVE_OBJECT_COMPLETE;
 }

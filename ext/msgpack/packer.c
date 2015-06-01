@@ -24,6 +24,7 @@ static ID s_next;
 static ID s_key;
 static ID s_value;
 #endif
+static ID s_call;
 
 void msgpack_packer_static_init()
 {
@@ -33,6 +34,7 @@ void msgpack_packer_static_init()
     s_key = rb_intern("key");
     s_value = rb_intern("value");
 #endif
+    s_call = rb_intern("call");
 }
 
 void msgpack_packer_static_destroy()
@@ -45,6 +47,8 @@ void msgpack_packer_init(msgpack_packer_t* pk)
     msgpack_buffer_init(PACKER_BUFFER_(pk));
 
     pk->io = Qnil;
+
+    pk->extended_types = Qnil;
 }
 
 void msgpack_packer_destroy(msgpack_packer_t* pk)
@@ -59,6 +63,7 @@ void msgpack_packer_mark(msgpack_packer_t* pk)
     /* See MessagePack_Buffer_wrap */
     /* msgpack_buffer_mark(PACKER_BUFFER_(pk)); */
     rb_gc_mark(pk->buffer_ref);
+    rb_gc_mark(pk->extended_types);
 }
 
 void msgpack_packer_reset(msgpack_packer_t* pk)
@@ -68,6 +73,37 @@ void msgpack_packer_reset(msgpack_packer_t* pk)
     pk->io = Qnil;
     pk->io_write_all_method = 0;
     pk->buffer_ref = Qnil;
+}
+
+static inline void _msgpack_packer_make_extended_hash(VALUE *extended_types) {
+    VALUE ev = *extended_types;
+    if(!RTEST(ev)) {
+      VALUE h = rb_hash_new();
+      rb_hash_set_ifnone(h, ev);
+      *extended_types = h;
+    }
+}
+
+void msgpack_packer_set_default_extended_type(msgpack_packer_t* pk, VALUE val)
+{
+    if(RTEST(val) || RTEST(pk->extended_types)) {
+        _msgpack_packer_make_extended_hash(&pk->extended_types);
+        rb_hash_set_ifnone(pk->extended_types, val);
+    } else {
+        pk->extended_types = val;
+    }
+}
+
+void msgpack_packer_set_extended_type(msgpack_packer_t* pk, VALUE klass, VALUE typenr, VALUE handler)
+{
+    _msgpack_packer_make_extended_hash(&pk->extended_types);
+    if(handler == Qnil) {
+        rb_hash_delete(pk->extended_types, klass);
+    } else if(handler == Qfalse) {
+        rb_hash_aset(pk->extended_types, klass, Qfalse);
+    } else {
+        rb_hash_aset(pk->extended_types, klass, rb_obj_freeze(rb_ary_new3(2, typenr, handler)));
+    }
 }
 
 
@@ -125,6 +161,60 @@ void msgpack_packer_write_hash_value(msgpack_packer_t* pk, VALUE v)
 
 static void _msgpack_packer_write_other_value(msgpack_packer_t* pk, VALUE v)
 {
+    /* check for registered class */
+    VALUE klass = rb_obj_class(v);
+    VALUE exttype_spec = msgpack_packer_resolve_registered_type(pk, klass);
+
+    switch(exttype_spec) {
+
+    case Qnil:
+        // no-op here, resort to to_msgpack
+        break;
+
+    case Qfalse:
+        rb_raise(rb_eTypeError, "packing of class %s disallowed", rb_class2name(klass));
+        break;
+
+    default:  // [typenr, handler]
+        {
+            VALUE type = rb_ary_entry(exttype_spec, 0);
+            VALUE handler = rb_ary_entry(exttype_spec, 1);
+            VALUE result;
+            switch(rb_type(handler)) {
+
+            case T_CLASS:
+
+                result = rb_funcall(v, pk->to_exttype_method, 2, type, pk->to_msgpack_arg);
+                break;
+
+            case T_SYMBOL:
+                result = rb_funcall(v, rb_to_id(handler), 2, type, pk->to_msgpack_arg);
+                break;
+
+            default: // a callable object
+                result = rb_funcall(handler, s_call, 3, v, type, pk->to_msgpack_arg);
+            }
+
+            int result_type = rb_type(result);
+
+            if(type == Qnil) {  // ran a low-level handler
+                if(result_type == T_STRING) {  // to catch a confusion between a high- a low- level serialization
+                    rb_raise(rb_eTypeError, "low-level exttype handler must not return a String");
+                }
+                // no-op, the low-level handler should have done all the work
+
+            } else {  // ran a high-level handler
+                if(rb_type(result) != T_STRING) {
+                    rb_raise(rb_eTypeError, "high-level exttype handler must return a String");
+                }
+                msgpack_packer_write_exttype_header(pk, RSTRING_LEN(result), FIX2INT(type));
+                msgpack_buffer_append_string(PACKER_BUFFER_(pk), result);
+            }
+            return;
+        }
+    }
+
+    /* unregistered class, try delegating the packing to the object itself */
     rb_funcall(v, pk->to_msgpack_method, 1, pk->to_msgpack_arg);
 }
 

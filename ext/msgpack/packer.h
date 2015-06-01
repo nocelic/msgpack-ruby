@@ -37,6 +37,9 @@ struct msgpack_packer_t {
     VALUE to_msgpack_arg;
 
     VALUE buffer_ref;
+
+    ID to_exttype_method;
+    VALUE extended_types;  // how to pack arbitrary classes. Can be Qnil or a hash
 };
 
 #define PACKER_BUFFER_(pk) (&(pk)->buffer)
@@ -472,6 +475,29 @@ void msgpack_packer_write_array_value(msgpack_packer_t* pk, VALUE v);
 void msgpack_packer_write_hash_value(msgpack_packer_t* pk, VALUE v);
 
 void msgpack_packer_write_value(msgpack_packer_t* pk, VALUE v);
+
+
+static inline VALUE msgpack_packer_get_registered_type( msgpack_packer_t* pk, VALUE klass)
+{
+    if(RTEST(pk->extended_types)) {  // type-specific mechanism active
+        return rb_hash_lookup2(pk->extended_types, klass, Qnil);
+    } else {
+        return Qnil;  // resolve_registered_type observes the defaults, get_registered_type does not
+    }
+}
+
+static inline VALUE msgpack_packer_resolve_registered_type( msgpack_packer_t* pk, VALUE klass)
+{
+    VALUE result = pk->extended_types;
+    if(RTEST(result)) {  // type-specific mechanism active
+        result = rb_hash_aref(result, klass);
+    }
+    return result;
+}
+
+void msgpack_packer_set_default_extended_type(msgpack_packer_t* pk, VALUE val);
+
+void msgpack_packer_set_extended_type(msgpack_packer_t* uk, VALUE klass, VALUE typenr, VALUE handler);
 
 
 #endif

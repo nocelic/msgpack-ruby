@@ -19,7 +19,7 @@
 #include "core_ext.h"
 #include "packer.h"
 #include "packer_class.h"
-#include "packer_helper.h"
+#include "packer_common.h"
 
 
 static VALUE NilClass_to_msgpack(int argc, VALUE* argv, VALUE self)

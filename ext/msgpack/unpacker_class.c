@@ -24,7 +24,7 @@
 VALUE cMessagePack_Unpacker;
 VALUE cMessagePack_exttypes;  // global default for unpacking extended types
 
-ID s_from_msgpack;
+ID s_from_exttype;
 ID s_call;
 
 //static VALUE s_unpacker_value;
@@ -40,11 +40,11 @@ static bool _unpacker_check_exttype_target(VALUE arg)
     switch(rb_type(arg)) {
     case T_NIL:
     case T_FALSE:
-        // no-op, assign v directly for memory and speed optimization if no explicit exttype mapping is defined
+        // no-op, always valid targets
         break;
     case T_CLASS:
-        if(!rb_respond_to(arg, s_from_msgpack)) {
-          rb_raise(rb_eArgError, "'from_msgpack' class method missing");
+        if(!rb_respond_to(arg, s_from_exttype)) {
+          rb_raise(rb_eArgError, "'from_exttype' class method missing");
         }
         break;
     case T_OBJECT:
@@ -93,13 +93,13 @@ static VALUE Unpacker_exttype_class_method(VALUE self, VALUE typenr)
 
 static VALUE Unpacker_register_exttype_class_method(int argc, VALUE *argv, VALUE self)
 {
-    VALUE typenr, val, block;
-    rb_scan_args(argc, argv, "11&", &typenr, &val, &block);
+    VALUE typenr, target, block;
+    rb_scan_args(argc, argv, "11&", &typenr, &target, &block);
     int8_t nr= _exttype_check_typecode( typenr);
-    _unpacker_check_exttype_set_args(argc, val, block);
-    _unpacker_check_exttype_target(val);
-    msgpack_unpacker_class_set_extended_type(nr, val);
-    return val;
+    target = _unpacker_check_exttype_set_args(argc, target, block);
+    _unpacker_check_exttype_target(target);
+    msgpack_unpacker_class_set_extended_type(nr, target);
+    return target;
 }
 
 
@@ -164,6 +164,7 @@ static VALUE Unpacker_initialize(int argc, VALUE* argv, VALUE self)
     UNPACKER(self, uk);
 
     MessagePack_Unpacker_initialize(uk, io, options);
+    uk->self_ref = self;
 
     return self;
 }
@@ -467,16 +468,25 @@ static VALUE Unpacker_resolve_exttype(VALUE self, VALUE typenr)
 
 static VALUE Unpacker_register_exttype(int argc, VALUE *argv, VALUE self)
 {
-    VALUE typenr, val, block;
-    rb_scan_args(argc, argv, "11&", &typenr, &val, &block);
+    VALUE typenr, target, block;
+    rb_scan_args(argc, argv, "11&", &typenr, &target, &block);
     int8_t nr= _exttype_check_typecode( typenr);
-    _unpacker_check_exttype_set_args(argc, val, block);
-    _unpacker_check_exttype_target(val);
+    target = _unpacker_check_exttype_set_args(argc, target, block);
+    _unpacker_check_exttype_target(target);
     UNPACKER(self, uk);
-    msgpack_unpacker_set_extended_type(uk, nr, val);
-    return val;
+    msgpack_unpacker_set_extended_type(uk, nr, target);
+    return target;
 }
 
+/* debug only */
+static VALUE Unpacker_exttype_table(VALUE self) {
+    UNPACKER(self, uk);
+    return uk->extended_types;
+}
+/* debug only */
+static VALUE Unpacker_exttype_table_class_method(VALUE self) {
+    return msgpack_unpacker_class_extended_types;
+}
 
 static VALUE MessagePack_load_module_method(int argc, VALUE* argv, VALUE mod)
 {
@@ -494,7 +504,7 @@ void MessagePack_Unpacker_module_init(VALUE mMessagePack)
 {
     msgpack_unpacker_static_init();
 
-    s_from_msgpack = rb_intern("from_msgpack");
+    s_from_exttype = rb_intern("from_exttype");
     s_call = rb_intern("call");
 
     cMessagePack_Unpacker = rb_define_class_under(mMessagePack, "Unpacker", rb_cObject);
@@ -514,6 +524,7 @@ void MessagePack_Unpacker_module_init(VALUE mMessagePack)
     rb_define_singleton_method(cMessagePack_Unpacker, "default_exttype", Unpacker_default_exttype_class_method, 0);
     rb_define_singleton_method(cMessagePack_Unpacker, "register_exttype", Unpacker_register_exttype_class_method, -1);
     rb_define_singleton_method(cMessagePack_Unpacker, "exttype", Unpacker_exttype_class_method, 1);
+    rb_define_singleton_method(cMessagePack_Unpacker, "exttype_table", Unpacker_exttype_table_class_method, 0);  // DEBUG-only, remove for production
 
     rb_define_method(cMessagePack_Unpacker, "initialize", Unpacker_initialize, -1);
     rb_define_method(cMessagePack_Unpacker, "buffer", Unpacker_buffer, 0);
@@ -535,6 +546,7 @@ void MessagePack_Unpacker_module_init(VALUE mMessagePack)
     rb_define_method(cMessagePack_Unpacker, "register_exttype", Unpacker_register_exttype, -1);
     rb_define_method(cMessagePack_Unpacker, "exttype", Unpacker_exttype, 1);  // returns exactly what register_exttype has set, no defaults
     rb_define_method(cMessagePack_Unpacker, "resolve_exttype", Unpacker_resolve_exttype, 1);  // also considers the instance and class defaults
+    rb_define_method(cMessagePack_Unpacker, "exttype_table", Unpacker_exttype_table, 0);  // DEBUG-only, remove for production
 
     //s_unpacker_value = Unpacker_alloc(cMessagePack_Unpacker);
     //rb_gc_register_address(&s_unpacker_value);

@@ -26,7 +26,11 @@
 VALUE cMessagePack_Packer;
 
 static ID s_to_msgpack;
+static ID s_to_exttype;
 static ID s_write;
+static ID s_instance_method;
+static VALUE v_to_exttype;
+static ID s_call;
 
 //static VALUE s_packer_value;
 //static msgpack_packer_t* s_packer;
@@ -37,6 +41,45 @@ static ID s_write;
     if(name == NULL) { \
         rb_raise(rb_eArgError, "NULL found for " # name " when shouldn't be."); \
     }
+
+static bool _packer_check_exttype_handler(VALUE arg, VALUE klass)
+{
+    switch(rb_type(arg)) {
+    case T_NIL:
+    case T_FALSE:
+        // no-op, always valid targets
+        break;
+    case T_CLASS:
+        rb_funcall(arg, s_instance_method, 1, v_to_exttype);  // make sure 'to_exttype' is defined
+        break;
+    case T_SYMBOL:
+        rb_funcall(klass, s_instance_method, 1, arg);  // make sure the indicated method is defined
+        break;
+    case T_OBJECT:
+        if(!rb_respond_to(arg, s_call)) {
+            rb_raise(rb_eArgError, "'call' method missing");
+        }
+        break;
+    default:
+        rb_raise(rb_eTypeError, "expected nil, false, a Class, or a callable object");
+    }
+    return true;
+}
+
+static VALUE _packer_check_exttype_set_args(int argc, VALUE klass, VALUE handler, VALUE block) {
+    if(block == Qnil) {
+        if(argc == 2) {
+            return klass;
+        }
+    } else {
+        if(argc == 3) {
+            rb_raise(rb_eArgError, "cannot take target argument and a block");
+        } else {
+            return block;
+        }
+    }
+    return handler;
+}
 
 static void Packer_free(msgpack_packer_t* pk)
 {
@@ -56,6 +99,8 @@ static VALUE Packer_alloc(VALUE klass)
 
     msgpack_packer_set_to_msgpack_method(pk, s_to_msgpack, self);
     pk->buffer_ref = MessagePack_Buffer_wrap(PACKER_BUFFER_(pk), self);
+
+    pk->to_exttype_method = s_to_exttype;
 
     return self;
 }
@@ -89,6 +134,18 @@ static VALUE Packer_initialize(int argc, VALUE* argv, VALUE self)
 
     PACKER(self, pk);
     MessagePack_Buffer_initialize(PACKER_BUFFER_(pk), io, options);
+
+
+    if(options != Qnil) {
+        VALUE v;
+
+        v = rb_hash_aref(options, ID2SYM(rb_intern("unregistered_class")));
+        if(RTEST(v)) {
+            rb_raise(rb_eArgError, "nil or false expected for unregistered_class option");
+        } else {
+            msgpack_packer_set_default_extended_type(pk, v);
+        }
+    }
 
     // TODO MessagePack_Unpacker_initialize and options
 
@@ -142,6 +199,33 @@ static VALUE Packer_flush(VALUE self)
     PACKER(self, pk);
     msgpack_buffer_flush(PACKER_BUFFER_(pk));
     return self;
+}
+
+static VALUE Packer_register_exttype(int argc, VALUE* argv, VALUE self)
+{
+    // args: class, typenr [, symbol | callable_object] [ &block ]
+    VALUE klass, typenr, handler, block;
+    rb_scan_args(argc, argv, "21&", &klass, &typenr, &handler, &block);
+    if(typenr != Qnil) {
+        _exttype_check_typecode(typenr);
+    }
+    handler = _packer_check_exttype_set_args(argc, klass, handler, block);
+    _packer_check_exttype_handler(handler, klass);
+    PACKER(self, pk);
+    msgpack_packer_set_extended_type(pk, klass, typenr, handler);
+    return handler;
+}
+
+static VALUE Packer_exttype(VALUE self, VALUE klass)
+{
+    PACKER(self, pk);
+    return msgpack_packer_get_registered_type(pk, klass);
+}
+
+static VALUE Packer_resolve_exttype(VALUE self, VALUE klass)
+{
+    PACKER(self, pk);
+    return msgpack_packer_resolve_registered_type(pk, klass);
 }
 
 static VALUE Packer_clear(VALUE self)
@@ -272,7 +356,12 @@ static VALUE MessagePack_pack_module_method(int argc, VALUE* argv, VALUE mod)
 void MessagePack_Packer_module_init(VALUE mMessagePack)
 {
     s_to_msgpack = rb_intern("to_msgpack");
+    s_to_exttype = rb_intern("to_exttype");
     s_write = rb_intern("write");
+    s_call = rb_intern("call");
+    s_instance_method = rb_intern("instance_method");
+    v_to_exttype = rb_str_new2("to_exttype");
+    rb_gc_register_address(&v_to_exttype);
 
     msgpack_packer_static_init();
 
@@ -289,6 +378,10 @@ void MessagePack_Packer_module_init(VALUE mMessagePack)
     rb_define_method(cMessagePack_Packer, "write_map_header", Packer_write_map_header, 1);
     rb_define_method(cMessagePack_Packer, "write_exttype_header", Packer_write_exttype_header, 2);
     rb_define_method(cMessagePack_Packer, "flush", Packer_flush, 0);
+    rb_define_method(cMessagePack_Packer, "register_exttype", Packer_register_exttype, -1);
+    rb_define_method(cMessagePack_Packer, "exttype", Packer_exttype, 1);
+    rb_define_method(cMessagePack_Packer, "resolve_exttype", Packer_resolve_exttype, 1);
+
 
     /* delegation methods */
     rb_define_method(cMessagePack_Packer, "clear", Packer_clear, 0);
