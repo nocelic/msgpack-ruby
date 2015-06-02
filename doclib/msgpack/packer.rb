@@ -130,5 +130,91 @@ module MessagePack
     #
     def write_to(io)
     end
+
+    #
+    # Register a class for packing via an extended type.
+    #
+    # When an instance of _klass_ is about to be packed, the packer will call an appropriate
+    # high-level or low-level method, as explained below.
+    #
+    # @return [Class] _klass_
+    #
+    # @overload register_exttype(klass, typenr)
+    #   Basic variant using predefined methods for packing.
+    #
+    #   For *high-level* packing, the invoked method is +to_exttype+(_typenr_, _packer_).
+    #   - _typenr_ is the extended type number registered here, and
+    #   - _packer_ is the +Packer+ instance doing the packing.
+    #   - +to_exttype+ must return a +String+ containing the exttype *payload only*.
+    #
+    #   For *low-level* packing, the invoked method is +to_msgpack+(_packer_).
+    #   * It should call _packer_ methods directly to write the exttpe header and exttype data.
+    #   * _packer_ is the +Packer+ instance doing the packing.
+    #   * Alternatively, {MessagePack::ExtType.pack} may be used for safety and convenience.
+    #   * Its return value is ignored.
+    #
+    #   @param klass [Class] the class to register for packing via extended type mechanism.
+    #
+    #   @param typenr [Integer,nil] the extended type number to assign to objects of this class.
+    #     - If a number +0..127+, it selects high-level packing.
+    #     - If +nil+, it selects low-level packing.
+    #
+    # @overload register_exttype(klass, typenr, handler_name)
+    #   @param handler_name [Symbol,String] method of the packed _klass_ instance to call instead of +to_exttype+/+to_msgpack+.
+    #   Both high- and low-level packing call the same method; only the number of arguments differs.
+    #
+    # @overload register_exttype(klass, typenr, handler_method)
+    #   @param handler_method [Method] a bound method to call on packing of an _klass_ instance.
+    #   It gets passed one extra argument, the _object_ being packed.
+    #   For high-level packing, the call is: +handler_method.call+(_typenr_, _object_, _packer_)
+    #   For low-level-level packing, the call is: +handler_method.call+(_object_, _packer_)
+    #
+    # @overload register_exttype(klass, typenr, &block)
+    #   @param block [Proc] is a block is given, it will be converted to a +Proc+ and treated the same way as a bound method above.
+    #
+    # @overload register_exttype(klass, typenr, +false+)
+    #   Prevent instances of _klass_ from being packed. An attempt to do so will result in a TypeError.
+    #
+    def register_exttype klass, typenr
+    end
+
+    #
+    # Unregister a previously registered class.
+    #
+    # @param klass [Class] the class to unregister.
+    def unregister_exttype klass
+    end
+
+    #
+    # Get the local registration info for _klass_.
+    #
+    # This method retrieves exactly the information registered with this instance and does not observe the defaults.
+    # To find out how _klass_ instances would actually be packed, use {#resolve_exttype}.
+    #
+    # @param klass [Class] the class to get the registration info for.
+    #
+    # @return [Array,nil,false]
+    #   - frozen array [typenr, handler], or
+    #   - nil if the defaults are to be used for _klass_, or
+    #   - false if _klass_ instance may not be packed
+    #
+    def exttype klass
+    end
+
+    #
+    # How _klass_ instances would be packed.
+    #
+    # Unlike {#exttype}, this method does observe the defaults.
+    #
+    # @param klass [Class] the class to get the packing info for.
+    #
+    # @return [Array,nil,false]
+    #   - frozen array [typenr, handler], or
+    #   - nil if no exttype info found for _klass_, or
+    #   - false if _klass_ instance may not be packed
+    #
+    def resolve_exttype klass
+    end
+
   end
 end

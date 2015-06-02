@@ -187,11 +187,11 @@ static void _msgpack_packer_write_other_value(msgpack_packer_t* pk, VALUE v)
             switch(rb_type(handler)) {
 
             case T_CLASS:
-                method =  pk->to_exttype_method;
+                method = pk->to_exttype_method;
                 break;
 
             case T_SYMBOL:
-                method =  rb_to_id(handler);
+                method = rb_to_id(handler);
                 break;
 
             default: // a callable object
