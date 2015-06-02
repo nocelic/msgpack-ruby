@@ -48,6 +48,7 @@ static bool _unpacker_check_exttype_target(VALUE arg)
         }
         break;
     case T_OBJECT:
+    case T_DATA:
         if(!rb_respond_to(arg, s_call)) {
             rb_raise(rb_eArgError, "'call' method missing");
         }
@@ -478,15 +479,14 @@ static VALUE Unpacker_register_exttype(int argc, VALUE *argv, VALUE self)
     return target;
 }
 
-/* debug only */
+/* for debug purposes only
 static VALUE Unpacker_exttype_table(VALUE self) {
     UNPACKER(self, uk);
     return uk->extended_types;
 }
-/* debug only */
 static VALUE Unpacker_exttype_table_class_method(VALUE self) {
     return msgpack_unpacker_class_extended_types;
-}
+*/
 
 static VALUE MessagePack_load_module_method(int argc, VALUE* argv, VALUE mod)
 {
@@ -524,7 +524,6 @@ void MessagePack_Unpacker_module_init(VALUE mMessagePack)
     rb_define_singleton_method(cMessagePack_Unpacker, "default_exttype", Unpacker_default_exttype_class_method, 0);
     rb_define_singleton_method(cMessagePack_Unpacker, "register_exttype", Unpacker_register_exttype_class_method, -1);
     rb_define_singleton_method(cMessagePack_Unpacker, "exttype", Unpacker_exttype_class_method, 1);
-    rb_define_singleton_method(cMessagePack_Unpacker, "exttype_table", Unpacker_exttype_table_class_method, 0);  // DEBUG-only, remove for production
 
     rb_define_method(cMessagePack_Unpacker, "initialize", Unpacker_initialize, -1);
     rb_define_method(cMessagePack_Unpacker, "buffer", Unpacker_buffer, 0);
@@ -546,7 +545,6 @@ void MessagePack_Unpacker_module_init(VALUE mMessagePack)
     rb_define_method(cMessagePack_Unpacker, "register_exttype", Unpacker_register_exttype, -1);
     rb_define_method(cMessagePack_Unpacker, "exttype", Unpacker_exttype, 1);  // returns exactly what register_exttype has set, no defaults
     rb_define_method(cMessagePack_Unpacker, "resolve_exttype", Unpacker_resolve_exttype, 1);  // also considers the instance and class defaults
-    rb_define_method(cMessagePack_Unpacker, "exttype_table", Unpacker_exttype_table, 0);  // DEBUG-only, remove for production
 
     //s_unpacker_value = Unpacker_alloc(cMessagePack_Unpacker);
     //rb_gc_register_address(&s_unpacker_value);

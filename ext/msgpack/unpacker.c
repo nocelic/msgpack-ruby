@@ -681,6 +681,7 @@ static inline int object_complete_extended_type(msgpack_unpacker_t* uk, int8_t t
     case T_NIL:    // both the instance and the class defaulted, no target exists
         return PRIMITIVE_UNKNOWN_EXTTYPE;
     case T_OBJECT:  // the object must be callable or it would have been rejected on setting
+    case T_DATA:
         method = s_call;
         break;
     case T_CLASS:  // the class must respond to 'from_exttype' or it would have been rejected on setting

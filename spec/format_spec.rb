@@ -157,6 +157,44 @@ describe MessagePack do
     #check_array 5, (1 << 32)-1  # memory error
   end
 
+unless /java/ =~ RUBY_PLATFORM
+
+  it "fixext 1" do
+    check_exttype 2, 1
+  end
+
+  it "fixext 2" do
+    check_exttype 2, 2
+  end
+
+  it "fixext 4" do
+    check_exttype 2, 4
+  end
+
+  it "fixext 8" do
+    check_exttype 2, 8
+  end
+
+  it "fixext 16" do
+    check_exttype 2, 16
+  end
+
+  it "ext 8" do
+    check_exttype 3, 3
+    check_exttype 3, 0xFF
+  end
+
+  it "ext 16" do
+    check_exttype 4, 0x100
+    check_exttype 4, 0xFFFF
+  end
+
+  it "ext 32" do
+    check_exttype 6, 0x10000
+  end
+
+end
+
   it "nil" do
     match nil, "\xc0"
   end
@@ -225,6 +263,25 @@ describe MessagePack do
     match obj, "\x80"
   end
 
+unless /java/ =~ RUBY_PLATFORM
+
+  it "ExtType[3,'ab']" do
+    obj = MessagePack::ExtType[3,"ab"]
+    match obj, "\xD5\x03ab"
+  end
+
+  it "ExtType[18,' .;*8]" do
+    obj = MessagePack::ExtType[18," ."*8]
+    match obj, "\xD8\x12 . . . . . . . ."
+  end
+
+  it "ExtType[56,' .'*3]" do
+    obj = MessagePack::ExtType[56," ."*3]
+    match obj, "\xC7\x068 . . ."
+  end
+
+end
+
 ## FIXME
 #  it "{0=>0, 1=>1, ..., 14=>14}" do
 #    a = (0..14).to_a;
@@ -268,6 +325,10 @@ describe MessagePack do
 
   def check_array(overhead, num)
     check num+overhead, Array.new(num)
+  end
+
+  def check_exttype(overhead, num)
+    check num+overhead, MessagePack::ExtType[127, " "*num]
   end
 
   def match(obj, buf)

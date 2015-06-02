@@ -180,21 +180,31 @@ static void _msgpack_packer_write_other_value(msgpack_packer_t* pk, VALUE v)
             VALUE type = rb_ary_entry(exttype_spec, 0);
             VALUE handler = rb_ary_entry(exttype_spec, 1);
             VALUE result;
+            VALUE method, obj = v;
+            VALUE argv[3] = { type, type, pk->to_msgpack_arg };
+            int argc = 2;
+
             switch(rb_type(handler)) {
 
             case T_CLASS:
-
-                result = rb_funcall(v, pk->to_exttype_method, 2, type, pk->to_msgpack_arg);
+                method =  pk->to_exttype_method;
                 break;
 
             case T_SYMBOL:
-                result = rb_funcall(v, rb_to_id(handler), 2, type, pk->to_msgpack_arg);
+                method =  rb_to_id(handler);
                 break;
 
             default: // a callable object
-                result = rb_funcall(handler, s_call, 3, v, type, pk->to_msgpack_arg);
+                obj = handler;
+                argv[1] = v;
+                method = s_call;
+                argc = 3;
             }
 
+            if(type == Qnil) {  // low-level packing, type argument not passed
+                --argc;
+            }
+            result = rb_funcall2(obj, method, argc, argv + (3 - argc));
             int result_type = rb_type(result);
 
             if(type == Qnil) {  // ran a low-level handler

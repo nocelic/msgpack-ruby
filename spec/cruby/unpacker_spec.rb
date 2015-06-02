@@ -10,6 +10,27 @@ describe Unpacker do
     Packer.new
   end
 
+  class Ext
+    def self.from_exttype(nr, data, unpacker)
+      self.new()
+    end
+    def deserializer(nr, data, unpacker)
+      [nr, data]
+    end
+  end
+
+  let :extobj do
+    Ext.new
+  end
+
+  before(:all) do
+    $unpacker_default = Unpacker.default_exttype
+  end
+
+  after(:all) do
+    Unpacker.default_exttype = $unpacker_default
+  end
+
   # TODO initialize
 
   it 'read_array_header succeeds' do
@@ -301,5 +322,131 @@ describe Unpacker do
     MessagePack.unpack([0xc6, 0x00, 0x00, 0x00, 0x01].pack('C*') + 'a').should == "a"
     MessagePack.unpack([0xc6, 0x00, 0x00, 0x00, 0x02].pack('C*') + 'aa').should == "aa"
   end
+
+  it "should register extended types with a class" do
+    unpacker.register_exttype 64, Ext
+    #
+    unpacker.exttype(64).should == Ext
+    unpacker.feed("\xD5@xx").unpack.class.should == Ext
+  end
+
+  it "should register extended types with a bound method" do
+    unpacker.register_exttype 65, extobj.method( :deserializer)
+    #
+    unpacker.exttype(65).class.should == Method
+    unpacker.feed("\xD5Ayy").unpack.should == [65, "yy"]
+  end
+
+  it "should register extended types with a block" do
+    unpacker.register_exttype(66) { |nr, data, unpacker| {nr => data} }
+    #
+    unpacker.exttype(66).class.should == Proc
+    unpacker.feed("\xD5Bzz").unpack.should == {66 => "zz"}
+  end
+
+  it "should refuse unknown exttypes by default" do
+    unpacker.default_exttype = false
+    #
+    unpacker.default_exttype.should == false
+    unpacker.exttype(63).should == nil
+    unpacker.resolve_exttype(63).should == false
+    lambda{ unpacker.feed("\xD5?aa").unpack }.should raise_error(MessagePack::UnpackError)
+  end
+
+  it "should refuse selected unknown exttypes" do
+    unpacker.register_exttype 64, false
+    #
+    unpacker.default_exttype.should == nil
+    unpacker.exttype(64).should == false
+    unpacker.resolve_exttype(64).should == false
+    lambda{ unpacker.feed("\xD5@aa").unpack }.should raise_error(MessagePack::UnpackError)
+    lambda{ unpacker.feed("\xD5!aa").unpack }.should_not raise_error
+  end
+
+  it "should set instance default exttype handler to a class" do
+    unpacker.default_exttype = Ext
+    #
+    unpacker.default_exttype.should == Ext
+    unpacker.exttype(75).should == nil
+    unpacker.resolve_exttype(75).should == Ext
+    unpacker.feed("\xD5Jxx").unpack.class.should == Ext
+  end
+
+  it "should set instance default exttype handler to a bound method" do
+    unpacker.default_exttype = extobj.method( :deserializer)
+    #
+    unpacker.default_exttype.class.should == Method
+    unpacker.exttype(75).should == nil
+    unpacker.resolve_exttype(75).class.should == Method
+    unpacker.feed("\xD5Kyy").unpack.should == [75, "yy"]
+  end
+
+  it "should set instance default exttype handler to a proc" do
+    unpacker.default_exttype = proc{ |nr, data, unpacker| {nr => data} }
+    #
+    unpacker.default_exttype.class.should == Proc
+    unpacker.exttype(76).should == nil
+    unpacker.resolve_exttype(76).class.should == Proc
+    unpacker.feed("\xD5Lzz").unpack.should == {76 =>"zz"}
+  end
+
+  it "should set global default exttype handler to a class" do
+    Unpacker.default_exttype = ExtType
+    #
+    Unpacker.default_exttype.should == ExtType
+    unpacker.exttype(77).should == nil
+    unpacker.resolve_exttype(77).should == ExtType
+    unpacker.feed("\xD5Mxx").unpack.should == ExtType[77, "xx"]
+  end
+
+  it "should set global default exttype handler to a bound method" do
+    Unpacker.default_exttype = extobj.method( :deserializer)
+    #
+    Unpacker.default_exttype.class.should == Method
+    unpacker.exttype(78).should == nil
+    unpacker.resolve_exttype(78).class.should == Method
+    unpacker.feed("\xD5Nyy").unpack.should == [78, "yy"]
+  end
+
+  it "should set global default exttype handler to a proc" do
+    Unpacker.default_exttype = proc{ |nr, data, unpacker| {nr => data} }
+    #
+    Unpacker.default_exttype.class.should == Proc
+    unpacker.exttype(79).should == nil
+    unpacker.resolve_exttype(79).class.should == Proc
+    unpacker.feed("\xD5Ozz").unpack.should == {79 => "zz"}
+  end
+
+  it "should globally refuse unknown exttypes by default if so instructed" do
+    Unpacker.default_exttype = false
+    #
+    Unpacker.default_exttype.should == false
+    unpacker.exttype(80).should == nil
+    unpacker.resolve_exttype(80).should == false
+    lambda{ unpacker.feed("\xD5Pww").unpack }.should raise_error(MessagePack::UnpackError)
+  end
+
+  it "should globally register exttypes by class" do
+    Unpacker.default_exttype = false
+    # -----
+    Unpacker.register_exttype 88, Ext
+    #
+    Unpacker.default_exttype.should == false
+    unpacker.resolve_exttype(87).should == false
+    unpacker.resolve_exttype(88).should == Ext
+    unpacker.feed("\xD5Xxx").unpack.class.should == Ext
+  end
+
+  it "should globally register exttypes with a block" do
+    Unpacker.default_exttype = false
+    # -----
+    Unpacker.register_exttype(89) { |nr, data, unpacker| {nr => data} }
+    #
+    Unpacker.default_exttype.should == false
+    unpacker.resolve_exttype(87).should == false
+    unpacker.resolve_exttype(89).class.should == Proc
+    unpacker.feed("\xD5Yyy").unpack.should == {89 => "yy"}
+  end
+
 end
 

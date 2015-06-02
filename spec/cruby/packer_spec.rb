@@ -7,8 +7,32 @@ if defined?(Encoding)
 end
 
 describe Packer do
+
+  class Ext
+    def to_exttype(nr, pk)
+      '.o0'
+    end
+    def to_msgpack(packer)
+      ExtType.pack packer, 42, self.to_exttype(0,packer)
+    end
+    def custom_exttype(*arg)
+      '.:|'
+    end
+    def pack_lowlevel(packer)
+      ExtType.pack packer, 35, self.custom_exttype(0,packer)
+    end
+  end
+
   let :packer do
     Packer.new
+  end
+
+  let :packer_of_known_types do
+    Packer.new :unknown_class => false
+  end
+
+  let :extobj do
+    Ext.new
   end
 
   it 'initialize' do
@@ -116,5 +140,78 @@ describe Packer do
     CustomPack02.new.to_msgpack(s04)
     s04.string.should == [1,2].to_msgpack
   end
+
+  it "register_exttype with no handler" do
+    packer.register_exttype Ext, 55
+    #
+    packer.exttype(Ext).should == [55, Ext]
+    packer.pack(extobj).to_s.should == "\xC7\x037.o0"
+    MessagePack.pack(extobj).should == "\xC7\x03*.o0"
+  end
+
+  it "register_exttype with method name" do
+    packer.register_exttype Ext, 55, :custom_exttype
+    #
+    packer.exttype(Ext).should == [55, :custom_exttype]
+    packer.pack(extobj).to_s.should == "\xC7\x037.:|"
+  end
+
+  it "register_exttype with block" do
+    packer.register_exttype(Ext, 55) { |type, packer| "-=+" }
+    #
+    packer.exttype(Ext).last.class.should == Proc
+    packer.pack(extobj).to_s.should == "\xC7\x037-=+"
+  end
+
+  it "unregister exttype via register_exttype" do
+    packer.register_exttype Ext, 55
+    packer.exttype(Ext).should == [55, Ext]
+    # -----
+    packer.register_exttype Ext, nil, nil
+    #
+    packer.exttype(Ext).should == nil
+    packer.clear
+    packer.pack(extobj).to_s.should == "\xC7\x03*.o0"
+  end
+
+  it "unregister exttype via unregister_exttype" do
+    packer.register_exttype Ext, 55
+    packer.exttype(Ext).should == [55, Ext]
+    # -----
+    packer.unregister_exttype Ext
+    #
+    packer.exttype(Ext).should == nil
+    packer.clear
+    packer.pack(extobj).to_s.should == "\xC7\x03*.o0"
+  end
+
+  it "should refuse unknown classes if so created" do
+    pk= packer_of_known_types
+    #
+    pk.register_exttype Ext, 55
+    pk.exttype(Ext).should == [55, Ext]
+    pk.exttype(Object).should == nil
+    pk.resolve_exttype(Object).should == false
+    # -----
+    pk.unregister_exttype Ext
+    #
+    pk.resolve_exttype(Ext).should == false
+    lambda{ pk.pack(extobj) }.should raise_exception(TypeError)
+  end
+
+  it "should allow low level packing by the packed object itself" do
+    packer.register_exttype Ext, nil, :pack_lowlevel
+    #
+    packer.exttype(Ext).should == [nil, :pack_lowlevel]
+    packer.pack(extobj).to_s.should == "\xC7\x03#.:|"
+  end
+
+  it "should allow low level packing by a block" do
+    packer.register_exttype(Ext, nil) { |obj, packer| ExtType.pack packer, 37, "-=+" }
+    #
+    packer.exttype(Ext).last.class.should == Proc
+    packer.pack(extobj).to_s.should == "\xC7\x03%-=+"
+  end
+
 end
 

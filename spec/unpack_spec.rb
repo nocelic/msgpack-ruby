@@ -7,6 +7,7 @@ if defined?(Encoding)
 end
 
 describe MessagePack do
+
   it 'MessagePack.unpack symbolize_keys' do
     symbolized_hash = {:a => 'b', :c => 'd'}
     MessagePack.load(MessagePack.pack(symbolized_hash), :symbolize_keys => true).should == symbolized_hash

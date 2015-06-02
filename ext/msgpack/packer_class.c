@@ -56,12 +56,13 @@ static bool _packer_check_exttype_handler(VALUE arg, VALUE klass)
         rb_funcall(klass, s_instance_method, 1, arg);  // make sure the indicated method is defined
         break;
     case T_OBJECT:
+    case T_DATA:  // incl. Proc
         if(!rb_respond_to(arg, s_call)) {
             rb_raise(rb_eArgError, "'call' method missing");
         }
         break;
     default:
-        rb_raise(rb_eTypeError, "expected nil, false, a Class, or a callable object");
+        rb_raise(rb_eTypeError, "expected nil, false, a Class, or a callable object, got %s", rb_class2name(rb_obj_class(arg)));
     }
     return true;
 }
@@ -139,9 +140,9 @@ static VALUE Packer_initialize(int argc, VALUE* argv, VALUE self)
     if(options != Qnil) {
         VALUE v;
 
-        v = rb_hash_aref(options, ID2SYM(rb_intern("unregistered_class")));
+        v = rb_hash_aref(options, ID2SYM(rb_intern("unknown_class")));
         if(RTEST(v)) {
-            rb_raise(rb_eArgError, "nil or false expected for unregistered_class option");
+            rb_raise(rb_eArgError, "nil or false expected for :unknown_class option");
         } else {
             msgpack_packer_set_default_extended_type(pk, v);
         }
@@ -214,6 +215,12 @@ static VALUE Packer_register_exttype(int argc, VALUE* argv, VALUE self)
     PACKER(self, pk);
     msgpack_packer_set_extended_type(pk, klass, typenr, handler);
     return handler;
+}
+
+static VALUE Packer_unregister_exttype(VALUE self, VALUE klass)
+{
+    VALUE argv2[3] = { klass, Qnil, Qnil };
+    return Packer_register_exttype(3, argv2, self);
 }
 
 static VALUE Packer_exttype(VALUE self, VALUE klass)
@@ -379,6 +386,7 @@ void MessagePack_Packer_module_init(VALUE mMessagePack)
     rb_define_method(cMessagePack_Packer, "write_exttype_header", Packer_write_exttype_header, 2);
     rb_define_method(cMessagePack_Packer, "flush", Packer_flush, 0);
     rb_define_method(cMessagePack_Packer, "register_exttype", Packer_register_exttype, -1);
+    rb_define_method(cMessagePack_Packer, "unregister_exttype", Packer_unregister_exttype, 1);
     rb_define_method(cMessagePack_Packer, "exttype", Packer_exttype, 1);
     rb_define_method(cMessagePack_Packer, "resolve_exttype", Packer_resolve_exttype, 1);
 
