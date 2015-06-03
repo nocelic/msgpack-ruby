@@ -75,6 +75,14 @@ module MessagePack
     end
 
     #
+    # Write a header of an extended type whose size is _n_ and type number is _typenr_.
+    #
+    # @return [Packer] self
+    #
+    def write_exttype_header(n, typenr)
+    end
+
+    #
     # Flushes data in the internal buffer to the internal IO. Same as _buffer.flush.
     # If internal IO is not set, it does nothing.
     #
