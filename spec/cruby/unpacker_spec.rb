@@ -6,6 +6,10 @@ describe Unpacker do
     Unpacker.new
   end
 
+  let :unpacker_of_known_types do
+    Unpacker.new :default_exttype => false
+  end
+
   let :packer do
     Packer.new
   end
@@ -388,6 +392,15 @@ describe Unpacker do
     unpacker.exttype(76).should == nil
     unpacker.resolve_exttype(76).class.should == Proc
     unpacker.feed("\xD5Lzz").unpack.should == {76 =>"zz"}
+  end
+
+  it "should observe the :default_exttype initialization option" do
+    uk = unpacker_of_known_types
+    #
+    uk.default_exttype.should == false
+    uk.exttype(80).should == nil
+    uk.resolve_exttype(80).should == false
+    lambda{ uk.feed("\xD5Pww").unpack }.should raise_error(MessagePack::UnpackError)
   end
 
   it "should set global default exttype handler to a class" do

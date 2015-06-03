@@ -213,5 +213,19 @@ describe Packer do
     packer.pack(extobj).to_s.should == "\xC7\x03%-=+"
   end
 
+  it "should allow low level packing via register_lowlevel method" do
+    packer.register_lowlevel Ext, :pack_lowlevel
+    #
+    packer.exttype(Ext).should == [nil, :pack_lowlevel]
+    packer.pack(extobj).to_s.should == "\xC7\x03#.:|"
+  end
+
+  it "should allow low level packing by a block via register_lowlevel" do
+    packer.register_lowlevel(Ext) { |obj, packer| ExtType.pack packer, 38, "-=+" }
+    #
+    packer.exttype(Ext).last.class.should == Proc
+    packer.pack(extobj).to_s.should == "\xC7\x03&-=+"
+  end
+
 end
 

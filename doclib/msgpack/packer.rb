@@ -205,6 +205,29 @@ module MessagePack
     def register_exttype klass, typenr, arg
     end
 
+
+    #
+    # To select low-level packing in {#register_exttype}, the _typenr_ argument must be set to +nil+
+    # +register_lowlevel+ is a convenience method that omits the _typenr_ parameter and calls +register_exttype+ with _typenr_=+nil+.
+    #
+    # @return [Class] _klass_
+    #
+    # @overload register_lowlevel(klass)
+    #
+    # @overload register_lowlevel(klass, handler_name)
+    #
+    # @overload register_lowlevel(klass, handler_method)
+    #
+    # @overload register_lowlevel(klass, &block)
+    #   @yieldparam object [Object] the object to pack.
+    #   @yieldparam packer [Packer] the packer doing the packing.
+    #   @yieldreturn [Object] ignored
+    #
+    # @overload register_lowlevel(klass, false)
+    #
+    def register_lowlevel klass, arg
+    end
+
     #
     # Unregister a previously registered class.
     #
