@@ -6,7 +6,6 @@ module MessagePack
   class Packer
     #
     # Creates a MessagePack::Packer instance.
-    # See Buffer#initialize for supported options.
     #
     # @overload initialize(options={})
     #   @param options [Hash]
@@ -17,7 +16,15 @@ module MessagePack
     #   This packer writes serialzied objects into the IO when the internal buffer is filled.
     #   _io_ must respond to write(string) or append(string) method.
     #
-    # See also Buffer#initialize for options.
+    # Supported options:
+    #
+    # * *:unknown_class* how to deal with unregistered classes.
+    #
+    #   When an unregistered class is about to be packed, the packer behavior can be influenced with this option value:
+    #   * +nil+:(default) proceed with the default behavior, call +to_msgpack+(packer) on the packed object.
+    #   * +false+: raise a TypeError exception.
+    #
+    # See also {Buffer#initialize} for further options.
     #
     def initialize(*args)
     end
@@ -164,13 +171,25 @@ module MessagePack
     #   Both high- and low-level packing call the same method; only the number of arguments differs.
     #
     # @overload register_exttype(klass, typenr, handler_method)
-    #   @param handler_method [Method] a bound method to call on packing of an _klass_ instance.
+    #   @param handler_method [Method] a bound method to call on packing of an instance of _klass_.
     #   It gets passed one extra argument, the _object_ being packed.
     #   For high-level packing, the call is: +handler_method.call+(_typenr_, _object_, _packer_)
     #   For low-level-level packing, the call is: +handler_method.call+(_object_, _packer_)
+    #   The meaning of the arguments is the same as for the block variant below.
     #
     # @overload register_exttype(klass, typenr, &block)
-    #   @param block [Proc] is a block is given, it will be converted to a +Proc+ and treated the same way as a bound method above.
+    #   If a block is given instead of a _handler_method_, it will be converted to a +Proc+ and treated the same way as a bound method above.
+    #   If typenr is Integer, high-level packing is selected, and the block is called with 3 arguments:
+    #   @yieldparam typenr [Integer] the same type number as in the registration.
+    #   @yieldparam object [Object] the object to pack.
+    #   @yieldparam packer [Packer] the packer doing the packing.
+    #   @yieldreturn [String] extended type data (payload)
+    #
+    # @overload register_exttype(klass, nil, &block)
+    #   If _typenr_ is nil, low-level packing is selected, and the block is called with 2 arguments:
+    #   @yieldparam object [Object] the object to pack.
+    #   @yieldparam packer [Packer] the packer doing the packing.
+    #   @yieldreturn [Object] ignored
     #
     # @overload register_exttype(klass, typenr, false)
     #   Prevent instances of _klass_ from being packed. An attempt to do so will result in a TypeError.
@@ -188,7 +207,7 @@ module MessagePack
     #
     # Get the local registration info for _klass_.
     #
-    # This method retrieves exactly the information registered with this Packer instance and does not observe the defaults.
+    # This method retrieves exactly the information registered with this Packer instance and does NOT observe the defaults.
     # To find out how _klass_ instances would actually be packed, use {#resolve_exttype}.
     #
     # @param klass [Class] the class to get the registration info for.
@@ -202,9 +221,12 @@ module MessagePack
     end
 
     #
-    # How _klass_ instances would be packed.
+    # Find out how _klass_ instances would be packed.
     #
-    # Unlike {#exttype}, this method does observe the defaults.
+    # Unlike {#exttype}, this method DOES observe the defaults.
+    #
+    # If this method returns +nil+, when packing an _object_,
+    # the packer will call _object_.+to_msgpack+(_packer_).
     #
     # @param klass [Class] the class to get the packing info for.
     #

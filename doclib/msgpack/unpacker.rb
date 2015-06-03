@@ -19,6 +19,7 @@ module MessagePack
     # Supported options:
     #
     # * *:symbolize_keys* deserialize keys of Hash objects as Symbol instead of String
+    # * *:default_exttype* [nil,false,Class,Method,Proc] How to deal with unregistered exttype numbers. See {#default_exttype=} for details.
     #
     # See also Buffer#initialize for other options.
     #
@@ -153,7 +154,10 @@ module MessagePack
     # @overload register_exttype(typenr, klass)
     #   Basic variant using predefined class method of _klass_ for unpacking.
     #
-    #   The invoked method is _klass_.+from_exttype+(_type_, _data_, _unpacker_).
+    #   The predefined method is:
+    #
+    #   +from_exttype+(_type_, _data_, _unpacker_).
+    #
     #   * _type_ [Integer] is the extended type number.
     #   * _data_ [String] is the extended type data (payload), ASCII-8BIT encoded.
     #   * _unpacker_ [Unpacker] is the +Unpacker+ instance performing the unpacking.
@@ -161,7 +165,7 @@ module MessagePack
     #
     #   @param typenr [Integer] the extended type number +0..127+ being registered.
     #
-    #   @param klass [Class] the class that will finish extended type unpacking.
+    #   @param klass [Class] the class that will finish the extended type unpacking via its +from_exttype+ method.
     #
     #
     # @overload register_exttype(typenr, method)
@@ -169,11 +173,15 @@ module MessagePack
     #     Arguments are the same as for _klass_.+from_exttype+ above.
     #
     # @overload register_exttype(typenr, &block)
-    #   @param block [Proc] a block to be called for unpacking the extended type _typenr_.
-    #     Arguments are the same as for _klass_.+from_exttype+ above.
+    #   This variant takes a block to be called for unpacking the extended type _typenr_.
+    #   Arguments are the same as for _klass_.+from_exttype+ above:
+    #   @yieldparam type [Integer]
+    #   @yieldparam data [String]
+    #   @yieldparam unpacker [Unpacker]
+    #   @yieldreturn [Object] the unpacked object
     #
     # @overload register_exttype(typenr, nil)
-    #   Unregister extended type _typenr_. Unpacker instance or class defaults may still apply.
+    #   Unregister extended type _typenr_. The defaults from Unpacker instance and Unpacker class still apply.
     #
     # @overload register_exttype(typenr, false)
     #   Prohibit unpacking of extended type _typenr_. UnpackerError exception will be raised if extended type _typenr_ is encountered.
@@ -184,7 +192,7 @@ module MessagePack
     #
     # Register a default mechanism for unpacking unknown extended types by this Unpacker instance.
     #
-    # When an unknown extended type is encountered in the input, the unpacker will use the default handler
+    # When an unregistered extended type is encountered in the input, the unpacker will use the default handler
     # to create the unpacked object.
     #
     # This method behaves the same as {#register_exttype}, except that it sets the default unpacker.
@@ -196,12 +204,19 @@ module MessagePack
     # @return [Class,Method,Proc,nil,false]
     #
     # @overload default_exttype= klass
-    #   Use _klass_.+from_exttpe+ for unpacking unknown extended types.
+    #   Use _klass_.+from_exttpe+(_typenr_, _data_) for unpacking unknown extended types.
+    #
     # @overload default_exttype= method_proc
     #   Register a bound method to unpack unknown extended types.
-    #   A block cannot be directly passed to this method, but a Proc can and it will be treated the same way as a bound method.
+    #   A block cannot be directly passed to this method, but a block converted to a proc can. A proc is treated the same way as a bound method.
+    #
+    #   The method or the proc will be called with 2 arguments:
+    #
+    #   _method_proc_.+call+(_typenr_, _data_).
+    #
     # @overload default_exttype= nil
     #   For unknown extended types, resort to global defaults.
+    #
     # @overload default_exttype= false
     #   Prohibit unpacking of unknown extended types. If such types are encountered, UnpackerError exception will be raised.
     #
@@ -219,7 +234,7 @@ module MessagePack
     #
     # Get the local registration info for extended type number _typenr_.
     #
-    # This method retrieves exactly the information registered with this Unpacker instance and does not observe the defaults.
+    # This method retrieves exactly the information registered with this Unpacker instance and does NOT observe the defaults.
     # To find out how extended type _typenr_ would actually be unpacked, use {#resolve_exttype}.
     #
     # @param typenr [Integer] the type number to look up.
@@ -233,15 +248,18 @@ module MessagePack
     end
 
     #
-    # How extended type _typenr_ instances would be unpacked.
+    # Find out how extended type _typenr_ would be unpacked.
     #
     # Unlike {#exttype}, this method does observe the instance and global defaults.
     # The lookup chain consists of:
-    #   1. self.exttype
-    #   1. self.default_exttype
-    #   1. Unpacker.exttype
-    #   1. Unpacker.default_exttype
+    # 1.  self.exttype( typenr )
+    # 2.  self.default_exttype
+    # 3.  Unpacker.exttype( typenr )
+    # 4.  Unpacker.default_exttype
     # The search proceeds down the lookup chain until a non-nil value is found.
+    #
+    # If this method returns +nil+, an attempt to unpack extended type _typenr_
+    # will result in an UnpackerError exception.
     #
     # @param typenr [Integer] the extended type number to look up.
     #
