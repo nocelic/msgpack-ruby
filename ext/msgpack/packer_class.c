@@ -217,6 +217,16 @@ static VALUE Packer_register_exttype(int argc, VALUE* argv, VALUE self)
     return handler;
 }
 
+static VALUE Packer_register_lowlevel(int argc, VALUE* argv, VALUE self)
+{
+    // args: class [, symbol | callable_object] [ &block ]
+    VALUE argv2[argc+1];
+    argv2[0] = argv[0];
+    argv2[1] = Qnil;
+    if(argc > 1) { argv2[2] = argv[1]; }
+    return Packer_register_exttype(argc+1, argv2, self);
+}
+
 static VALUE Packer_unregister_exttype(VALUE self, VALUE klass)
 {
     VALUE argv2[3] = { klass, Qnil, Qnil };
@@ -386,6 +396,7 @@ void MessagePack_Packer_module_init(VALUE mMessagePack)
     rb_define_method(cMessagePack_Packer, "write_exttype_header", Packer_write_exttype_header, 2);
     rb_define_method(cMessagePack_Packer, "flush", Packer_flush, 0);
     rb_define_method(cMessagePack_Packer, "register_exttype", Packer_register_exttype, -1);
+    rb_define_method(cMessagePack_Packer, "register_lowlevel", Packer_register_lowlevel, -1);
     rb_define_method(cMessagePack_Packer, "unregister_exttype", Packer_unregister_exttype, 1);
     rb_define_method(cMessagePack_Packer, "exttype", Packer_exttype, 1);
     rb_define_method(cMessagePack_Packer, "resolve_exttype", Packer_resolve_exttype, 1);

@@ -148,7 +148,7 @@ static inline VALUE msgpack_unpacker_get_default_extended_type(msgpack_unpacker_
     return _get_default_extended_type( uk->extended_types);
 }
 
-void msgpack_unpacker_set_extended_type(msgpack_unpacker_t* uk, int8_t typenr, VALUE val);
+void msgpack_unpacker_set_extended_type(msgpack_unpacker_t* uk, VALUE typenr, VALUE val);
 
 static inline VALUE msgpack_unpacker_get_extended_type(msgpack_unpacker_t* uk, int8_t typenr)
 {

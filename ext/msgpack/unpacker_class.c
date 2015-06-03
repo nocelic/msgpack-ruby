@@ -467,17 +467,32 @@ static VALUE Unpacker_resolve_exttype(VALUE self, VALUE typenr)
     return msgpack_unpacker_resolve_extended_type(uk, nr);
 }
 
+#define UNPACKER_REGISTER_DRY \
+    VALUE typenr, target, block; \
+    rb_scan_args(argc, argv, "11&", &typenr, &target, &block); \
+    VALUE nr= INT2FIX(_exttype_check_typecode(typenr)); \
+    target = _unpacker_check_exttype_set_args(argc, target, block); \
+    _unpacker_check_exttype_target(target); \
+    UNPACKER(self, uk);
+
 static VALUE Unpacker_register_exttype(int argc, VALUE *argv, VALUE self)
 {
-    VALUE typenr, target, block;
-    rb_scan_args(argc, argv, "11&", &typenr, &target, &block);
-    int8_t nr= _exttype_check_typecode( typenr);
-    target = _unpacker_check_exttype_set_args(argc, target, block);
-    _unpacker_check_exttype_target(target);
-    UNPACKER(self, uk);
+    UNPACKER_REGISTER_DRY
     msgpack_unpacker_set_extended_type(uk, nr, target);
     return target;
 }
+
+// TODO: how to find out whether the low-level handler has read the 'length' bytes from the buffer or not?
+// As long as this is unsolved, enabling the low-level unpacking is probably too risky.
+// Also, support for array-encoded target in unpacker.c is TBD.
+/*
+static VALUE Unpacker_register_lowlevel(int argc, VALUE *argv, VALUE self)
+{
+    UNPACKER_REGISTER_DRY
+    msgpack_unpacker_set_extended_type(uk, nr, rb_obj_freeze(rb_ary_new3(1, target)));
+    return target;
+}
+*/
 
 /* for debug purposes only
 static VALUE Unpacker_exttype_table(VALUE self) {
@@ -523,6 +538,7 @@ void MessagePack_Unpacker_module_init(VALUE mMessagePack)
     rb_define_singleton_method(cMessagePack_Unpacker, "default_exttype=", Unpacker_default_exttype_set_class_method, 1);
     rb_define_singleton_method(cMessagePack_Unpacker, "default_exttype", Unpacker_default_exttype_class_method, 0);
     rb_define_singleton_method(cMessagePack_Unpacker, "register_exttype", Unpacker_register_exttype_class_method, -1);
+    //~ rb_define_singleton_method(cMessagePack_Unpacker, "register_lowlevel", Unpacker_register_lowlevel_class_method, -1);  //TODO
     rb_define_singleton_method(cMessagePack_Unpacker, "exttype", Unpacker_exttype_class_method, 1);
 
     rb_define_method(cMessagePack_Unpacker, "initialize", Unpacker_initialize, -1);
@@ -543,6 +559,7 @@ void MessagePack_Unpacker_module_init(VALUE mMessagePack)
     rb_define_method(cMessagePack_Unpacker, "default_exttype=", Unpacker_default_exttype_set, 1);
     rb_define_method(cMessagePack_Unpacker, "default_exttype", Unpacker_default_exttype, 0);
     rb_define_method(cMessagePack_Unpacker, "register_exttype", Unpacker_register_exttype, -1);
+    //~ rb_define_method(cMessagePack_Unpacker, "register_lowlevel", Unpacker_register_lowlevel, -1);  // TODO
     rb_define_method(cMessagePack_Unpacker, "exttype", Unpacker_exttype, 1);  // returns exactly what register_exttype has set, no defaults
     rb_define_method(cMessagePack_Unpacker, "resolve_exttype", Unpacker_resolve_exttype, 1);  // also considers the instance and class defaults
 

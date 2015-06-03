@@ -1,0 +1,200 @@
+
+= MessagePack
+
+MessagePack[http://msgpack.org] is an efficient binary serialization format.
+
+= MessagePack-Ruby
+
+This is a fork of Ruby MessagePack library[https://github.com/msgpack/msgpack-ruby].
+
+It aims to add the support for extended types from the MessagePack specification to the MessagePack-Ruby library.
+
+= Extended Types
+
+== Use cases
+
+* Create serializers and deserializers for types not explicitly supported by the MessagePack specification, like Time or Symbol.
+* Create SerDes mechanism for user-defined classes.
+
+== Serializing to Extended Types
+
+=== Low-level serialization
+
+By default, when a <tt>MessagePack::Packer</tt> instance is requested to pack an object of an unknown class, it will delegate the packing to the object's <tt>to_msgpack</tt> method.
+
+To be packable, the object needs to respond to the <tt>to_msgpack</tt> method.
+
+For example:
+
+    class MyClass
+      def initialize( data )
+          @data = data.to_s
+      end
+      def to_msgpack( packer )
+          MessagePack::ExtType.pack( packer, 22, @data )
+      end
+    end
+
+will use extended type number 22 for packing instances of +MyClass+ class.
+In this particular case, the extended type data (payload) will be whatever is supplied to the initializer of +MyClass+.
+
+<tt>MessagePack::ExtType.pack</tt> hides the low level details of the <tt>MessagePack::Packer</tt> and <tt>MessagePack::Buffer</tt> from the user.
+
+It is possible to use <tt>Packer#write_extended_header</tt> and <tt>Buffer#write</tt> directly to achieve the same effect as <tt>ExtType.pack</tt>. However, this requires slightly more caution because it may result in an incorrect output if the length argument supplied to <tt>Packer#write_extended_header</tt> does not match the actual byte length of the string fed to <tt>Buffer#write</tt>.
+
+=== High-level serialization
+
+The default low-level <tt>to_msgpack</tt> mechanism gives the control of the extended type number <b>to the packed object</b>, not to the packer.
+
+If the opposite is desired, it is possible to register classes with a packer and this way give the control of the extended type number <b>to the packer</b>. In that case, the object's serialization method only needs to return the payload as a string, everything else is handled by the packer. For that reason, this approach is called "high-level" packing.
+
+When a class is registered with a packer, the method called on that class instances is <tt>to_exttype</tt>:
+
+    class MyClass  = (reusing the initializer from above)
+      def to_exttype( typenr, packer )
+        return @data
+      end
+    end
+    packer = MessagePack::Packer.new
+    packer.register_exttype 33, MyClass
+
+=== Handling unregistered classes
+
+By default, registered classes will be handled by the described high-level mechanism, and for unregistered classes the packer will fall back to the low-level <tt>to_msgpack</tt> mechanism.
+
+To prevent the packer from falling back to <tt>to_msgpack</tt> in case of unregistered classes, the packer can be created with the <tt>:unknown_class => false</tt> option:
+
+    packer = MessagePack::Packer.new :unknown_class => false
+
+A packer created this way will refuse objects of unregistered classes and will raise TypeError if such objects are attempted to be packed.
+
+
+=== Low-level packing of registered classes
+
+If some classes need to be handled by a packer via the low-level mechanism, but
+- the packer is set up to refuse unknown classes, and/or
+- a method different from <tt>to_msgpack</tt> should be used,
+
+the class can be registered with the packer using <tt>register_lowlevel</tt>:
+
+    packer.register_lowlevel MyClass
+
+or, equivalently, the <tt>register_exttype</tt> method with _typenr_ = +nil+:
+
+    packer.register_exttype nil, MyClass
+
+
+=== Callable handlers
+
+Instead of predefined methods on the registered class instances, it is possible to register any callable object as the packing handler.
+Callable objects include bound methods and procs. If a block is given to <tt>register_exttype</tt> / <tt>register_lowlevel</tt>, it will be automatically
+converted to a proc:
+
+    packer.register_exttype( Time, 0x7f ) do |typenr, time, packer|
+      [time.to_i].pack("N")
+    end
+    packer.exttype Time  #=>  [127, #<Proc:.......>]
+
+Or, if a low-level packing is desired:
+
+    packer.register_lowlevel( Time ) do |time, packer|
+      MessagePack::ExtType.pack( packer, 0x7f, [time.to_i].pack('N') )
+    end
+    packer.exttype Time  #=>  [nil, #<Proc:.......>]
+
+The above <tt>MessagePack::ExtType.pack</tt> call is equivalent to this even lower-level code:
+
+    packer.register_lowlevel( Time ) do |time, packer|
+      buff = packer.buffer
+      buff.write_extended_header( 0x7f, 4 )
+      buffer.write_uint32( time.to_i )
+    end
+
+== Deserializing Extended Types
+
+=== Default behavior
+
+By default, when a <tt>MessagePack::Unpacker</tt> instance finds extended types in its input stream, it creates a
+<tt>MessagePack::ExtType</tt> instance holding the type number and raw data found in the input.
+
+    unpacker = MessagePack::Unpacker.new
+    unpacker.feed( "\xD6@abcd" ).unpack  #=>  #<MessagePack::ExtType:.... @type=64, @data="abcd">
+
+This default behavior can be modified by assigning to <tt>MessagePack::Unpacker.default_exttype</tt>. For example:
+
+    MessagePack::Unpacker.default_exttype = false
+
+changes the default behavior to raising a <tt>MessagePack::UnpackerError</tt> exception for unknown extended types.
+
+To change the default behavior of just a single <tt>MessagePack::Unpacker</tt> instance, <tt>default_exttype=</tt> can be invoked on that instance:
+
+    unpacker = MessagePack::Unpacker.new
+    unpacker.default_exttype = false
+
+or it can be created with the <tt>:default_exttype</tt> option:
+
+    unpacker = MessagePack::Unpacker.new :default_exttype => false
+
+
+=== Registered types
+
+To alter the behavior of <tt>MessagePack::Unpacker</tt> instances for specific extended types, their handler can be registered with <tt>register_exttype</tt>:
+
+    class MyClass
+      def initialize( data )
+          @data = data.to_s
+      end
+      def self.from_exttype( type, data, unpacker )
+          self.new data
+      end
+    end
+    unpacker = MessagePack::Unpacker.new
+    unpacker.register_exttype 22, MyClass
+
+The above code will instruct the unpacker to call <tt>from_exttype</tt> method of the <tt>MyClass</tt> class when it needs to unpack extended type nr 22.
+
+The data argument passed to the <tt>from_exttype</tt> method contains already unpacked extended type payload as a string.
+
+To register a type on the global level, <tt>MessagePack::Unpacker.register_exttype</tt>:
+
+    MessagePack::Unpacker.register_exttype 22, MyClass
+
+Such a registration will be available to all <tt>MessagePack::Unpacker</tt> instances, unless they override it on per-instance basis.
+
+
+=== Lookup Chain
+
+So far we have seen per-instance and global extended type registration, as well as the per-instance and global defaults.
+
+The exact lookup chain is as follows:
+
+    1.  self.exttype( typenr )
+    2.  self.default_exttype
+    3.  Unpacker.exttype( typenr )
+    4.  Unpacker.default_exttype
+
+where +self+ is a <tt>MessagePack::Unpacker</tt> instance and +typenr+ is the extended type number found in the input stream.
+
+The search proceeds down the lookup chain until a non-nil value is found.
+
+To find out how an extended type _typenr_ would be unpacked, <tt>resolve_exttype</tt> method can be used:
+
+    unpacker.resolve_exttype 22  #=>  MyClass
+
+If <tt>resolve_exttype</tt> returns +nil+ for an extended type _typenr_, an attempt to unpack such an extended
+type will result in an UnpackerError exception.
+
+
+=== Callable handlers
+
+Instead of predefined class methods, it is possible to register any callable object (e,g, Method or Proc) as the unpacking handler.
+
+If a block is given to <tt>register_exttype<tt>, it will be automatically converted to a proc:
+
+    unpacker.register_exttype( 0x7f ) do |type, data, unpacker|
+      if data.length != 4
+        raise MessagePack::MalformedFormatError, "Expected 4 bytes for Extended type 0x7f but got #{data.size} bytes"
+      end
+      Time.at( *data.unpack('N') )
+    end
+    unpacker.feed( "\xD6\x7FUo\x90\xA6" ).unpack  #=>  2015-06-04 01:41:26 0200

@@ -151,14 +151,13 @@ void msgpack_unpacker_set_default_extended_type(msgpack_unpacker_t* uk, VALUE va
     }
 }
 
-void msgpack_unpacker_set_extended_type(msgpack_unpacker_t* uk, int8_t typenr, VALUE val)
+void msgpack_unpacker_set_extended_type(msgpack_unpacker_t* uk, VALUE typenr, VALUE val)
 {
     _msgpack_unpacker_make_extended_hash(&uk->extended_types);
-    VALUE key = INT2FIX(typenr);
     if(val == Qnil) {
-        rb_hash_delete(uk->extended_types, key);
+        rb_hash_delete(uk->extended_types, typenr);
     } else {
-        rb_hash_aset(uk->extended_types, key, val);
+        rb_hash_aset(uk->extended_types, typenr, val);
     }
 }
 
