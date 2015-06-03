@@ -141,6 +141,161 @@ module MessagePack
     #
     def reset
     end
+
+    #
+    # Register a mechanism for unpacking extended type _typenr_.
+    #
+    # When extended type _typenr_ is encountered in the input, the unpacker will call an appropriate
+    # method to create the unpacked object, as explained below.
+    #
+    # @return [Integer] _typenr_
+    #
+    # @overload register_exttype(typenr, klass)
+    #   Basic variant using predefined class method of _klass_ for unpacking.
+    #
+    #   The invoked method is _klass_.+from_exttype+(_type_, _data_, _unpacker_).
+    #   * _type_ [Integer] is the extended type number.
+    #   * _data_ [String] is the extended type data (payload), ASCII-8BIT encoded.
+    #   * _unpacker_ [Unpacker] is the +Unpacker+ instance performing the unpacking.
+    #   * Its return value is the final unpacked object.
+    #
+    #   @param typenr [Integer] the extended type number +0..127+ being registered.
+    #
+    #   @param klass [Class] the class that will finish extended type unpacking.
+    #
+    #
+    # @overload register_exttype(typenr, method)
+    #   @param method [Method] a bound method to be called for unpacking the extended type _typenr_.
+    #     Arguments are the same as for _klass_.+from_exttype+ above.
+    #
+    # @overload register_exttype(typenr, &block)
+    #   @param block [Proc] a block to be called for unpacking the extended type _typenr_.
+    #     Arguments are the same as for _klass_.+from_exttype+ above.
+    #
+    # @overload register_exttype(typenr, nil)
+    #   Unregister extended type _typenr_. Unpacker instance or class defaults may still apply.
+    #
+    # @overload register_exttype(typenr, false)
+    #   Prohibit unpacking of extended type _typenr_. UnpackerError exception will be raised if extended type _typenr_ is encountered.
+    #
+    def register_exttype typenr, arg
+    end
+
+    #
+    # Register a default mechanism for unpacking unknown extended types by this Unpacker instance.
+    #
+    # When an unknown extended type is encountered in the input, the unpacker will use the default handler
+    # to create the unpacked object.
+    #
+    # This method behaves the same as {#register_exttype}, except that it sets the default unpacker.
+    # The default unpacker is used when there is no registration info found for a given extended type.
+    # Correspondingly, the _typenr_ argument is omitted in comparison to {#register_exttype}.
+    #
+    # See {#register_exttype} for more details.
+    #
+    # @return [Class,Method,Proc,nil,false]
+    #
+    # @overload default_exttype= klass
+    #   Use _klass_.+from_exttpe+ for unpacking unknown extended types.
+    # @overload default_exttype= method_proc
+    #   Register a bound method to unpack unknown extended types.
+    #   A block cannot be directly passed to this method, but a Proc can and it will be treated the same way as a bound method.
+    # @overload default_exttype= nil
+    #   For unknown extended types, resort to global defaults.
+    # @overload default_exttype= false
+    #   Prohibit unpacking of unknown extended types. If such types are encountered, UnpackerError exception will be raised.
+    #
+    def default_exttype= arg
+    end
+
+    #
+    # Retrieve the default unpacker of extended types set by {#register_exttype}.
+    #
+    # @return [Class,Method,Proc,nil,false]
+    #
+    def default_exttype
+    end
+
+    #
+    # Get the local registration info for extended type number _typenr_.
+    #
+    # This method retrieves exactly the information registered with this Unpacker instance and does not observe the defaults.
+    # To find out how extended type _typenr_ would actually be unpacked, use {#resolve_exttype}.
+    #
+    # @param typenr [Integer] the type number to look up.
+    #
+    # @return [Class,Method,Proc,nil,false]
+    #   - Class / Method / Proc registered for unpacking this extended type, or
+    #   - nil if the defaults are to be used for extended type _typenr_, or
+    #   - false if _typenr_ extended type may not be unpacked (raising an UnpackerError exception instead)
+    #
+    def exttype typenr
+    end
+
+    #
+    # How extended type _typenr_ instances would be unpacked.
+    #
+    # Unlike {#exttype}, this method does observe the instance and global defaults.
+    # The lookup chain consists of:
+    #   1. self.exttype
+    #   1. self.default_exttype
+    #   1. Unpacker.exttype
+    #   1. Unpacker.default_exttype
+    # The search proceeds down the lookup chain until a non-nil value is found.
+    #
+    # @param typenr [Integer] the extended type number to look up.
+    #
+    # @return [Class,Method,Proc,nil,false]
+    #   - the Class / Method / Proc registered for unpacking this extended type, or
+    #   - nil if no info has been found for extended type _typenr_, or
+    #   - false if _typenr_ extended type may not be unpacked (raising an UnpackerError exception instead)
+    #
+    def resolve_exttype typenr
+    end
+
+    #
+    # Register the global default mechanism for unpacking unknown extended types.
+    #
+    # It behaves the same as {#default_exttype=}, except that it sets the *global* Unpacker default, not the Unpacker instance default.
+    #
+    # See {#default_exttype=} for more details.
+    #
+    def self.default_exttype= arg
+    end
+
+    #
+    # Retrieve the global default mechanism for unpacking unknown extended types.
+    #
+    # It behaves the same as {#default_exttype}, except that it gets the *global* Unpacker default, not the Unpacker instance default.
+    #
+    # See {#default_exttype} for more details.
+    #
+    # @return [Class,Method,Proc,nil,false]
+    #
+    def self.default_exttype
+    end
+
+    #
+    # Register the global default mechanism for unpacking extended type _typenr_.
+    #
+    # It behaves the same as {#register_exttype}, except that it sets the *global* default behavior for extended type _typenr_, not for an instance.
+    # The behavior set by {#register_exttype} always overrides the global default.
+    #
+    # See {#register_exttype} for more details.
+    #
+    # @return [Integer] _typenr_
+    #
+    def self.register_exttype typenr, arg
+    end
+
+    #
+    # Get the local registration info for extended type number _typenr_.
+    #
+    # @return [Class,Method,Proc,nil,false]
+    #
+    def self.exttype
+    end
+
   end
 
 end

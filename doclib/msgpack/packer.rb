@@ -172,10 +172,10 @@ module MessagePack
     # @overload register_exttype(klass, typenr, &block)
     #   @param block [Proc] is a block is given, it will be converted to a +Proc+ and treated the same way as a bound method above.
     #
-    # @overload register_exttype(klass, typenr, +false+)
+    # @overload register_exttype(klass, typenr, false)
     #   Prevent instances of _klass_ from being packed. An attempt to do so will result in a TypeError.
     #
-    def register_exttype klass, typenr
+    def register_exttype klass, typenr, arg
     end
 
     #
@@ -188,7 +188,7 @@ module MessagePack
     #
     # Get the local registration info for _klass_.
     #
-    # This method retrieves exactly the information registered with this instance and does not observe the defaults.
+    # This method retrieves exactly the information registered with this Packer instance and does not observe the defaults.
     # To find out how _klass_ instances would actually be packed, use {#resolve_exttype}.
     #
     # @param klass [Class] the class to get the registration info for.
