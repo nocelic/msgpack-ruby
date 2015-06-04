@@ -157,9 +157,7 @@ module MessagePack
     # @overload register_exttype(klass, typenr)
     #   Basic variant using predefined methods for packing.
     #
-    #   For *high-level* packing, the invoked method is +to_exttype+(_typenr_, _packer_).
-    #   - _typenr_ is the extended type number registered here, and
-    #   - _packer_ is the +Packer+ instance doing the packing.
+    #   For *high-level* packing, the invoked method is +to_exttype+(), with no arguments.
     #   - +to_exttype+ must return a +String+ containing the exttype *payload only*.
     #
     #   For *low-level* packing, the invoked method is +to_msgpack+(_packer_).
@@ -181,16 +179,14 @@ module MessagePack
     # @overload register_exttype(klass, typenr, handler_method)
     #   @param handler_method [Method] a bound method to call on packing of an instance of _klass_.
     #   It gets passed one extra argument, the _object_ being packed.
-    #   For high-level packing, the call is: +handler_method.call+(_typenr_, _object_, _packer_)
+    #   For high-level packing, the call is: +handler_method.call+(_object_, _packer_)
     #   For low-level-level packing, the call is: +handler_method.call+(_object_, _packer_)
     #   The meaning of the arguments is the same as for the block variant below.
     #
     # @overload register_exttype(klass, typenr, &block)
     #   If a block is given instead of a _handler_method_, it will be converted to a +Proc+ and treated the same way as a bound method above.
-    #   If typenr is Integer, high-level packing is selected, and the block is called with 3 arguments:
-    #   @yieldparam typenr [Integer] the same type number as in the registration.
+    #   If typenr is Integer, high-level packing is selected, and the block is called with 1 argument:
     #   @yieldparam object [Object] the object to pack.
-    #   @yieldparam packer [Packer] the packer doing the packing.
     #   @yieldreturn [String] extended type data (payload)
     #
     # @overload register_exttype(klass, nil, &block)

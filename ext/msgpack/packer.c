@@ -181,8 +181,9 @@ static void _msgpack_packer_write_other_value(msgpack_packer_t* pk, VALUE v)
             VALUE handler = rb_ary_entry(exttype_spec, 1);
             VALUE result;
             VALUE method, obj = v;
-            VALUE argv[3] = { type, type, pk->to_msgpack_arg };
-            int argc = 2;
+            VALUE argv[2] = { v, pk->to_msgpack_arg };
+            int arg_lo = 1;
+            int arg_hi = 2;
 
             switch(rb_type(handler)) {
 
@@ -194,17 +195,17 @@ static void _msgpack_packer_write_other_value(msgpack_packer_t* pk, VALUE v)
                 method = rb_to_id(handler);
                 break;
 
-            default: // a callable object
+            default: // a callable handler, pass the object in
                 obj = handler;
-                argv[1] = v;
                 method = s_call;
-                argc = 3;
+                arg_lo = 0;
             }
 
-            if(type == Qnil) {  // low-level packing, type argument not passed
-                --argc;
+            if(type != Qnil) {  // high-level packing, packer not passed
+                --arg_hi;
             }
-            result = rb_funcall2(obj, method, argc, argv + (3 - argc));
+
+            result = rb_funcall2(obj, method, arg_hi-arg_lo, argv + arg_lo);
             int result_type = rb_type(result);
 
             if(type == Qnil) {  // ran a low-level handler

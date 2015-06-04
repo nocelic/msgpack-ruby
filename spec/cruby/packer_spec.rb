@@ -9,17 +9,17 @@ end
 describe Packer do
 
   class Ext
-    def to_exttype(nr, pk)
+    def to_exttype()
       '.o0'
     end
     def to_msgpack(packer)
-      ExtType.pack packer, 42, self.to_exttype(0,packer)
+      ExtType.pack packer, 42, self.to_exttype
     end
-    def custom_exttype(*arg)
+    def custom_exttype()
       '.:|'
     end
     def pack_lowlevel(packer)
-      ExtType.pack packer, 35, self.custom_exttype(0,packer)
+      ExtType.pack packer, 35, self.custom_exttype
     end
   end
 
@@ -157,7 +157,7 @@ describe Packer do
   end
 
   it "register_exttype with block" do
-    packer.register_exttype(Ext, 55) { |type, packer| "-=+" }
+    packer.register_exttype(Ext, 55) { "-=+" }
     #
     packer.exttype(Ext).last.class.should == Proc
     packer.pack(extobj).to_s.should == "\xC7\x037-=+"
