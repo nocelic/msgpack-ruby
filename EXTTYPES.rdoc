@@ -51,7 +51,7 @@ If the opposite is desired, it is possible to register classes with a packer and
 When a class is registered with a packer, the method called on that class instances is <tt>to_exttype</tt>:
 
     class MyClass  = (reusing the initializer from above)
-      def to_exttype( typenr, packer )
+      def to_exttype
         return @data
       end
     end
@@ -90,7 +90,7 @@ Instead of predefined methods on the registered class instances, it is possible 
 Callable objects include bound methods and procs. If a block is given to <tt>register_exttype</tt> / <tt>register_lowlevel</tt>, it will be automatically
 converted to a proc:
 
-    packer.register_exttype( Time, 0x7f ) do |typenr, time, packer|
+    packer.register_exttype( Time, 0x7f ) do |time|
       [time.to_i].pack("N")
     end
     packer.exttype Time  #=>  [127, #<Proc:.......>]
@@ -108,7 +108,7 @@ The above <tt>MessagePack::ExtType.pack</tt> call is equivalent to this even low
     packer.register_lowlevel( Time ) do |time, packer|
       buff = packer.buffer
       buff.write_extended_header( 0x7f, 4 )
-      buffer.write_uint32( time.to_i )
+      buffer.write( [time.to_i].pack('N') )
     end
 
 == Deserializing Extended Types
@@ -145,7 +145,7 @@ To alter the behavior of <tt>MessagePack::Unpacker</tt> instances for specific e
       def initialize( data )
           @data = data.to_s
       end
-      def self.from_exttype( type, data, unpacker )
+      def self.from_exttype( type, data )
           self.new data
       end
     end
@@ -192,7 +192,7 @@ Instead of predefined class methods, it is possible to register any callable obj
 
 If a block is given to <tt>register_exttype<tt>, it will be automatically converted to a proc:
 
-    unpacker.register_exttype( 0x7f ) do |type, data, unpacker|
+    unpacker.register_exttype( 0x7f ) do |type, data|
       if data.length != 4
         raise MessagePack::MalformedFormatError, "Expected 4 bytes for Extended type 0x7f but got #{data.size} bytes"
       end
