@@ -694,8 +694,8 @@ static inline int object_complete_extended_type(msgpack_unpacker_t* uk, int8_t t
 #ifdef COMPAT_HAVE_ENCODING
     ENCODING_SET(data, msgpack_rb_encindex_ascii8bit);
 #endif
-    VALUE argv[3] = {INT2FIX(typenr), data, uk->self_ref};
-    uk->last_object = rb_funcall2(target, method, 3, argv);
+    VALUE argv[2] = {INT2FIX(typenr), data};
+    uk->last_object = rb_funcall2(target, method, 2, argv);
 
     return PRIMITIVE_OBJECT_COMPLETE;
 }

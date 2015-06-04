@@ -15,10 +15,10 @@ describe Unpacker do
   end
 
   class Ext
-    def self.from_exttype(nr, data, unpacker)
+    def self.from_exttype(nr, data)
       self.new()
     end
-    def deserializer(nr, data, unpacker)
+    def deserializer(nr, data)
       [nr, data]
     end
   end
@@ -342,7 +342,7 @@ describe Unpacker do
   end
 
   it "should register extended types with a block" do
-    unpacker.register_exttype(66) { |nr, data, unpacker| {nr => data} }
+    unpacker.register_exttype(66) { |nr, data| {nr => data} }
     #
     unpacker.exttype(66).class.should == Proc
     unpacker.feed("\xD5Bzz").unpack.should == {66 => "zz"}
@@ -386,7 +386,7 @@ describe Unpacker do
   end
 
   it "should set instance default exttype handler to a proc" do
-    unpacker.default_exttype = proc{ |nr, data, unpacker| {nr => data} }
+    unpacker.default_exttype = proc{ |nr, data| {nr => data} }
     #
     unpacker.default_exttype.class.should == Proc
     unpacker.exttype(76).should == nil
@@ -422,7 +422,7 @@ describe Unpacker do
   end
 
   it "should set global default exttype handler to a proc" do
-    Unpacker.default_exttype = proc{ |nr, data, unpacker| {nr => data} }
+    Unpacker.default_exttype = proc{ |nr, data| {nr => data} }
     #
     Unpacker.default_exttype.class.should == Proc
     unpacker.exttype(79).should == nil
@@ -453,7 +453,7 @@ describe Unpacker do
   it "should globally register exttypes with a block" do
     Unpacker.default_exttype = false
     # -----
-    Unpacker.register_exttype(89) { |nr, data, unpacker| {nr => data} }
+    Unpacker.register_exttype(89) { |nr, data| {nr => data} }
     #
     Unpacker.default_exttype.should == false
     unpacker.resolve_exttype(87).should == false

@@ -156,11 +156,10 @@ module MessagePack
     #
     #   The predefined method is:
     #
-    #   +from_exttype+(_type_, _data_, _unpacker_).
+    #   +from_exttype+(_type_, _data_).
     #
     #   * _type_ [Integer] is the extended type number.
     #   * _data_ [String] is the extended type data (payload), ASCII-8BIT encoded.
-    #   * _unpacker_ [Unpacker] is the +Unpacker+ instance performing the unpacking.
     #   * Its return value is the final unpacked object.
     #
     #   @param typenr [Integer] the extended type number +0..127+ being registered.
@@ -177,7 +176,6 @@ module MessagePack
     #   Arguments are the same as for _klass_.+from_exttype+ above:
     #   @yieldparam type [Integer]
     #   @yieldparam data [String]
-    #   @yieldparam unpacker [Unpacker]
     #   @yieldreturn [Object] the unpacked object
     #
     # @overload register_exttype(typenr, nil)
@@ -207,8 +205,8 @@ module MessagePack
     #   Use _klass_.+from_exttpe+(_typenr_, _data_) for unpacking unknown extended types.
     #
     # @overload default_exttype= method_proc
-    #   Register a bound method to unpack unknown extended types.
-    #   A block cannot be directly passed to this method, but a block converted to a proc can. A proc is treated the same way as a bound method.
+    #   Register a bound method or a proc to unpack unknown extended types.
+    #   A proc is treated the same way as a bound method.
     #
     #   The method or the proc will be called with 2 arguments:
     #
