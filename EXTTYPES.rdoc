@@ -101,6 +101,7 @@ Or, if a low-level packing is desired:
       MessagePack::ExtType.pack( packer, 0x7f, [time.to_i].pack('N') )
     end
     packer.exttype Time  #=>  [nil, #<Proc:.......>]
+    packer.pack( Time.now).to_s  #=>  "\xD6\x7FUo\x9B\xEC"
 
 The above <tt>MessagePack::ExtType.pack</tt> call is equivalent to this even lower-level code:
 
