@@ -31,7 +31,7 @@ static VALUE ExtType_set_as_global_default_class_method(VALUE self)
     return rb_funcall(cMessagePack_Unpacker, rb_intern("default_exttype="), 1, self);
 }
 
-static VALUE ExtType_from_exttype_class_method(VALUE self, VALUE type, VALUE data, VALUE unpacker)
+static VALUE ExtType_from_exttype_class_method(VALUE self, VALUE type, VALUE data)
 {
     VALUE argv[2] = {type, data};
     return rb_class_new_instance(2, argv, self);
@@ -114,7 +114,7 @@ static VALUE ExtType_to_msgpack(int argc, VALUE* argv, VALUE self)
     return packer;
 }
 
-static VALUE ExtType_to_exttype(VALUE self, VALUE type, VALUE packer)
+static VALUE ExtType_to_exttype(VALUE self)
 {
     return rb_iv_get(self, "@data");
 }
@@ -130,7 +130,7 @@ void MessagePack_ExtType_module_init(VALUE mMessagePack)
     rb_define_singleton_method(cMessagePack_ExtType, "set_as_global_default", ExtType_set_as_global_default_class_method, 0);
 
     /* unpacking of exttypes: */
-    rb_define_singleton_method(cMessagePack_ExtType, "from_exttype", ExtType_from_exttype_class_method, 3);
+    rb_define_singleton_method(cMessagePack_ExtType, "from_exttype", ExtType_from_exttype_class_method, 2);
 
     /* high-level packing of exttypes (use Packer.write_exttype_header and Packer.buffer for low-level packing): */
     rb_define_singleton_method(cMessagePack_ExtType, "pack", ExtType_pack_class_method, -1);  // write raw data
@@ -140,7 +140,7 @@ void MessagePack_ExtType_module_init(VALUE mMessagePack)
     rb_define_method(cMessagePack_ExtType, "type", ExtType_type, 0);
     rb_define_method(cMessagePack_ExtType, "data", ExtType_data, 0);
     rb_define_method(cMessagePack_ExtType, "==", ExtType_equals, 1);
-    rb_define_method(cMessagePack_ExtType, "to_exttype", ExtType_to_exttype, 2);
+    rb_define_method(cMessagePack_ExtType, "to_exttype", ExtType_to_exttype, 0);
     rb_define_method(cMessagePack_ExtType, "to_msgpack", ExtType_to_msgpack, -1);
 
     /* Compatibility classes */

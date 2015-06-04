@@ -58,7 +58,7 @@ module MessagePack
     #
     #  Intended to be called internally by the _unpacker_.
     #
-    def self.from_exttype(typenr, data, unpacker)
+    def self.from_exttype(typenr, data)
     end
 
     #
@@ -105,14 +105,7 @@ module MessagePack
     #
     # @return [String] raw data (payload)
     #
-    # @param [Integer] typenr the extended type number that will be used for packing.
-    #   The type number used in creation of this ExtType instance is thereby irrelevant.
-    #   In the default implementation the {#data} is returned, regardless of both {#type} and _typenr_.
-    #
-    # @param [Packer] packer the +Packer+ doing the packing (and thus calling this method).
-    #   In most cases it can be ignored unless some low-level manipulation of the _packer_ buffer required.
-    #
-    def to_exttype(typenr, packer)
+    def to_exttype()
     end
 
     #
